@@ -15,22 +15,19 @@ import type { TractDemographics } from './data-sources/census'
 import type { SpendEstimate } from './data-sources/spend-estimate'
 import type { FloodZoneResult } from './data-sources/fema-flood'
 import type { CrimeContext } from './data-sources/fbi-crime'
+import {
+  type GradeWeights,
+  DEFAULT_WEIGHTS,
+  CATEGORY_LABELS,
+  scoreToGrade,
+} from './grader-types'
+
+// Re-exported so existing server-side imports of these from grader.ts
+// keep working. Client Components should import these directly from
+// './grader-types' instead, to avoid bundling the Anthropic SDK below.
+export { type GradeWeights, DEFAULT_WEIGHTS, CATEGORY_LABELS, scoreToGrade }
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-
-// ── Grade thresholds ──────────────────────────────────────────
-
-const GRADE_THRESHOLDS: Array<{ min: number; grade: string }> = [
-  { min: 97, grade: 'A+' }, { min: 93, grade: 'A' }, { min: 90, grade: 'A-' },
-  { min: 87, grade: 'B+' }, { min: 83, grade: 'B' }, { min: 80, grade: 'B-' },
-  { min: 77, grade: 'C+' }, { min: 73, grade: 'C' }, { min: 70, grade: 'C-' },
-  { min: 67, grade: 'D+' }, { min: 63, grade: 'D' }, { min: 60, grade: 'D-' },
-  { min: 0,  grade: 'F' },
-]
-
-export function scoreToGrade(score: number): string {
-  return GRADE_THRESHOLDS.find((t) => score >= t.min)?.grade ?? 'F'
-}
 
 // ── Traffic Score (unchanged benchmarks — AADT is AADT regardless of source) ──
 
@@ -188,33 +185,7 @@ export function scoreCrimeContext(crime: CrimeContext | null): { score: number; 
 }
 
 // ── Weights + redistribution ───────────────────────────────────
-
-export interface GradeWeights {
-  traffic: number
-  consumerSpend: number
-  demographics: number
-  anchorTenant: number
-  floodRisk: number
-  crime: number
-}
-
-export const DEFAULT_WEIGHTS: GradeWeights = {
-  traffic: 0.22,
-  consumerSpend: 0.18,
-  demographics: 0.22,
-  anchorTenant: 0.18,
-  floodRisk: 0.12,
-  crime: 0.08,
-}
-
-export const CATEGORY_LABELS: Record<keyof GradeWeights, string> = {
-  traffic: 'Traffic Exposure',
-  consumerSpend: 'Spending Power (Est.)',
-  demographics: 'Demographics',
-  anchorTenant: 'Anchor Tenants & Retail',
-  floodRisk: 'Flood Resilience',
-  crime: 'Safety Context',
-}
+// (GradeWeights, DEFAULT_WEIGHTS, CATEGORY_LABELS now live in ./grader-types)
 
 /**
  * When a category has no data, redistribute its weight proportionally
