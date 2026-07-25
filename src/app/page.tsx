@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CATEGORY_LABELS, type GradeWeights } from '@/lib/grader'
+import { CATEGORY_LABELS, type GradeWeights } from '@/lib/grader-types'
 
 interface AnalyzeResponse {
   reportId: number
