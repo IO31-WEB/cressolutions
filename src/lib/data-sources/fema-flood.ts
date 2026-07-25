@@ -10,7 +10,7 @@
  */
 
 const NFHL_ENDPOINT =
-  'https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28/query'
+  'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query'
 
 export interface FloodZoneResult {
   zone: string
@@ -44,11 +44,17 @@ export async function getFloodZone(lat: number, lng: number): Promise<FloodZoneR
   url.searchParams.set('returnGeometry', 'false')
 
   const res = await fetch(url.toString())
-  if (!res.ok) return null
+  if (!res.ok) {
+    console.error(`FEMA NFHL query failed: ${res.status} ${res.statusText}`, await res.text().catch(() => ''))
+    return null
+  }
 
   const data = await res.json()
   const attrs = data?.features?.[0]?.attributes
-  if (!attrs?.FLD_ZONE) return null
+  if (!attrs?.FLD_ZONE) {
+    console.warn('FEMA NFHL returned no flood-zone feature for this point', JSON.stringify(data).slice(0, 500))
+    return null
+  }
 
   const zone: string = attrs.FLD_ZONE
   const isSfha = attrs.SFHA_TF === 'T' || attrs.SFHA_TF === true
