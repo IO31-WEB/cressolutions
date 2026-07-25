@@ -48,7 +48,10 @@ async function fetchOffenseSummary(
 ): Promise<Array<{ data_year: number; actual: number }>> {
   const url = `${FBI_API_BASE}/summarized/agencies/${ori}/${offense}?api_key=${FBI_API_KEY}`
   const res = await fetch(url)
-  if (!res.ok) return []
+  if (!res.ok) {
+    console.error(`FBI crime API failed for ${ori}/${offense}: ${res.status} ${res.statusText}`, await res.text().catch(() => ''))
+    return []
+  }
   const data = await res.json()
   return data?.results ?? []
 }
