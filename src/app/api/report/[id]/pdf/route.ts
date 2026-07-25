@@ -66,12 +66,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     const filename = `site-quality-report-${report.formattedAddress.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`
 
-    return new NextResponse(pdfBuffer, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
-    })
+return new NextResponse(Buffer.from(pdfBuffer), {
+  headers: {
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="${filename}"`,
+  },
+})
   } finally {
     await browser.close()
   }
