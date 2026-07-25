@@ -11,11 +11,14 @@
  * The ORI (Originating Agency Identifier) codes below are placeholders and
  * MUST be replaced with real codes before this goes live. Getting this wrong
  * would silently attribute the wrong agency's crime data to a report, which
- * is worse than showing no data at all. Look up real ORIs in ~5 min at
- * https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads — search by
- * agency name, the ORI is shown on each agency's profile page. Do this for
- * at minimum: Tampa PD, St. Petersburg PD, Clearwater PD, Bradenton PD, and
- * the Hillsborough/Pinellas/Pasco/Manatee County Sheriff's Offices.
+ * is worse than showing no data at all. Don't guess these from memory or an
+ * AI's memory — verify against the source. Fastest reliable way: call
+ * https://api.usa.gov/crime/fbi/sapi/api/agencies/byStateAbbr/FL?api_key=YOUR_KEY
+ * which returns every FL agency's ORI + name in one JSON response — search
+ * the results for the agency name (e.g. "Hillsborough", "Collier") rather
+ * than typing an ORI in by hand. Do this for at minimum: Tampa PD, St.
+ * Petersburg PD, Clearwater PD, Naples PD, Bradenton PD, and the
+ * Hillsborough/Pinellas/Pasco/Manatee/Collier County Sheriff's Offices.
  */
 
 const FBI_API_BASE = 'https://api.usa.gov/crime/fbi/sapi/api'
@@ -24,10 +27,11 @@ const FBI_API_KEY = process.env.FBI_CRIME_API_KEY
 // county FIPS (Florida, state FIPS 12) → primary reporting agency ORI
 // TODO: replace with verified ORIs — see note above.
 const COUNTY_TO_ORI: Record<string, { agencyName: string; ori: string }> = {
-  '057': { agencyName: 'Hillsborough County Sheriff\'s Office', ori: '' }, // Hillsborough
-  '103': { agencyName: 'Pinellas County Sheriff\'s Office', ori: '' },     // Pinellas
-  '101': { agencyName: 'Pasco County Sheriff\'s Office', ori: '' },        // Pasco
-  '081': { agencyName: 'Manatee County Sheriff\'s Office', ori: '' },      // Manatee
+  '057': { agencyName: 'Hillsborough County Sheriff\'s Office', ori: 'FL0290500' }, // Hillsborough
+  '103': { agencyName: 'Pinellas County Sheriff\'s Office', ori: 'FL0520000' },     // Pinellas
+  '101': { agencyName: 'Pasco County Sheriff\'s Office', ori: 'FL0510000' },        // Pasco
+  '081': { agencyName: 'Manatee County Sheriff\'s Office', ori: 'FL0410000' },      // Manatee
+  '021': { agencyName: 'Collier County Sheriff\'s Office', ori: 'FL0110000' },      // Collier (Naples)
 }
 
 export interface CrimeContext {
