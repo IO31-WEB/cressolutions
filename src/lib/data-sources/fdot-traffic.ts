@@ -19,6 +19,8 @@ const FDOT_AADT_ENDPOINT =
 export interface TrafficCount {
   aadt: number
   roadway: string | null
+  descFrom: string | null
+  descTo: string | null
   distanceMiles: number
 }
 
@@ -42,6 +44,7 @@ export async function getNearbyTrafficCounts(
   url.searchParams.set('geometry', `${lng},${lat}`)
   url.searchParams.set('geometryType', 'esriGeometryPoint')
   url.searchParams.set('inSR', '4326')
+  url.searchParams.set('outSR', '4326')
   url.searchParams.set('spatialRel', 'esriSpatialRelIntersects')
   url.searchParams.set('distance', String(milesToMeters(radiusMiles)))
   url.searchParams.set('units', 'esriSRUnit_Meter')
@@ -79,7 +82,13 @@ export async function getNearbyTrafficCounts(
 
       return {
         aadt,
+        // NOTE: FDOT's ROADWAY field is a coded route ID (e.g. "10190000"),
+        // not a human-readable street name — kept here for reference/debug
+        // but never shown to end users. DESC_FRM/DESC_TO describe the
+        // count-segment's cross streets and are what's actually readable.
         roadway: attrs.ROADWAY ?? attrs.RDWYID ?? attrs.COSITE ?? null,
+        descFrom: attrs.DESC_FRM ?? null,
+        descTo: attrs.DESC_TO ?? null,
         distanceMiles: Math.round(distanceMiles * 100) / 100,
       }
     })
