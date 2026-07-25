@@ -249,7 +249,7 @@ Property: ${opts.address}
 Overall Site Quality Score: ${opts.overallGrade} (${opts.overallScore.toFixed(1)}/100)
 
 Category scores:
-- Traffic: ${opts.categoryScores.traffic.toFixed(1)}/100 — ${topTraffic.map(t => `${t.roadway ?? 'nearby road'} (${t.aadt.toLocaleString()} AADT)`).join(', ') || 'no traffic count data available'}
+- Traffic: ${opts.categoryScores.traffic.toFixed(1)}/100 — ${topTraffic.map(t => `${t.descFrom && t.descTo ? `${t.descFrom} to ${t.descTo}` : 'nearby segment'} (${t.aadt.toLocaleString()} AADT)`).join(', ') || 'no traffic count data available'}
 - Estimated spending power: ${opts.categoryScores.consumerSpend.toFixed(1)}/100${opts.spendEstimate ? ` — est. $${(opts.spendEstimate.estimatedTradeAreaSpendTotal / 1_000_000).toFixed(0)}M annual trade-area spend (estimated, not reported)` : ''}
 - Demographics: ${opts.categoryScores.demographics.toFixed(1)}/100${opts.demographics ? ` — ${opts.demographics.population.toLocaleString()} pop, ${opts.demographics.populationGrowth5yr}% 5yr growth, median income $${opts.demographics.medianHouseholdIncome.toLocaleString()}, median age ${opts.demographics.medianAge}` : ''}
 - Anchor tenants/retail density: ${opts.categoryScores.anchorTenant.toFixed(1)}/100 — ${opts.anchors.length ? opts.anchors.map(a => `${a.name} (${a.distanceMiles}mi, ${a.impact})`).join(', ') : 'no major anchors detected nearby'}
