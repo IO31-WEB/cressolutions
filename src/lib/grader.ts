@@ -1,0 +1,329 @@
+/**
+ * Site Quality Scoring Engine — adapted from ListOps' property-grader.ts.
+ *
+ * Deliberately called a "Site Quality Score," never an "appraisal" or
+ * "valuation" — Florida reserves that language for licensed appraisers.
+ * This is a due-diligence starting point for investors/business owners,
+ * not a substitute for professional inspection, survey, or appraisal —
+ * that disclaimer belongs on every PDF this engine produces.
+ */
+
+import Anthropic from '@anthropic-ai/sdk'
+import type { TrafficCount } from './data-sources/fdot-traffic'
+import type { Retailer } from './data-sources/places'
+import type { TractDemographics } from './data-sources/census'
+import type { SpendEstimate } from './data-sources/spend-estimate'
+import type { FloodZoneResult } from './data-sources/fema-flood'
+import type { CrimeContext } from './data-sources/fbi-crime'
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+
+// ── Grade thresholds ──────────────────────────────────────────
+
+const GRADE_THRESHOLDS: Array<{ min: number; grade: string }> = [
+  { min: 97, grade: 'A+' }, { min: 93, grade: 'A' }, { min: 90, grade: 'A-' },
+  { min: 87, grade: 'B+' }, { min: 83, grade: 'B' }, { min: 80, grade: 'B-' },
+  { min: 77, grade: 'C+' }, { min: 73, grade: 'C' }, { min: 70, grade: 'C-' },
+  { min: 67, grade: 'D+' }, { min: 63, grade: 'D' }, { min: 60, grade: 'D-' },
+  { min: 0,  grade: 'F' },
+]
+
+export function scoreToGrade(score: number): string {
+  return GRADE_THRESHOLDS.find((t) => score >= t.min)?.grade ?? 'F'
+}
+
+// ── Traffic Score (unchanged benchmarks — AADT is AADT regardless of source) ──
+
+export function scoreTraffic(counts: TrafficCount[]): { score: number; hasData: boolean } {
+  if (!counts.length) return { score: 40, hasData: false }
+
+  const primary = counts.filter((c) => c.distanceMiles <= 0.5).sort((a, b) => b.aadt - a.aadt)[0]
+  const secondary = counts.filter((c) => c.distanceMiles <= 1.0).sort((a, b) => b.aadt - a.aadt)[0]
+  const volume = primary?.aadt ?? secondary?.aadt ?? 0
+
+  let score: number
+  if (volume >= 50_000) score = 100
+  else if (volume >= 40_000) score = 95
+  else if (volume >= 30_000) score = 88
+  else if (volume >= 20_000) score = 80
+  else if (volume >= 15_000) score = 72
+  else if (volume >= 10_000) score = 63
+  else if (volume >= 5_000)  score = 52
+  else if (volume >= 2_000)  score = 40
+  else score = 25
+
+  return { score, hasData: true }
+}
+
+// ── Consumer Spend Score ──────────────────────────────────────
+// Calibrated to CENSUS TRACT scale aggregate spend (typical FL tract:
+// 2,000-8,000 residents), NOT the 3-5 mile trade-area scale ATTOM/ESRI
+// report at — these are a different geography and shouldn't share thresholds.
+
+export function scoreConsumerSpend(estimate: SpendEstimate | null): { score: number; hasData: boolean } {
+  if (!estimate) return { score: 40, hasData: false }
+  const totalM = estimate.estimatedTradeAreaSpendTotal / 1_000_000
+
+  let score: number
+  if (totalM >= 250) score = 100
+  else if (totalM >= 200) score = 92
+  else if (totalM >= 150) score = 84
+  else if (totalM >= 120) score = 76
+  else if (totalM >= 90)  score = 68
+  else if (totalM >= 65)  score = 58
+  else if (totalM >= 40)  score = 46
+  else if (totalM >= 20)  score = 34
+  else score = 22
+
+  return { score, hasData: true }
+}
+
+// ── Demographics Score ────────────────────────────────────────
+// Population thresholds recalibrated for TRACT scale, not 3-mile-ring scale.
+
+export function scoreDemographics(demo: TractDemographics | null): { score: number; hasData: boolean } {
+  if (!demo) return { score: 40, hasData: false }
+
+  let score = 0
+
+  // Population (tract-scale) — 25 pts
+  if (demo.population >= 8_000)      score += 25
+  else if (demo.population >= 6_000) score += 22
+  else if (demo.population >= 4_500) score += 18
+  else if (demo.population >= 3_000) score += 14
+  else if (demo.population >= 1_500) score += 9
+  else                                score += 4
+
+  // 5yr growth — 20 pts
+  if (demo.populationGrowth5yr >= 15)      score += 20
+  else if (demo.populationGrowth5yr >= 10) score += 16
+  else if (demo.populationGrowth5yr >= 5)  score += 11
+  else if (demo.populationGrowth5yr >= 0)  score += 6
+  else                                      score += 0
+
+  // Bachelor's+ — 20 pts
+  if (demo.bachelorsPlusPct >= 45)      score += 20
+  else if (demo.bachelorsPlusPct >= 35) score += 16
+  else if (demo.bachelorsPlusPct >= 25) score += 12
+  else if (demo.bachelorsPlusPct >= 15) score += 7
+  else                                   score += 3
+
+  // Median age suitability — 15 pts
+  if (demo.medianAge >= 30 && demo.medianAge <= 55) score += 15
+  else if (demo.medianAge >= 25 && demo.medianAge <= 60) score += 10
+  else score += 5
+
+  // Median household income — 20 pts
+  if (demo.medianHouseholdIncome >= 110_000)      score += 20
+  else if (demo.medianHouseholdIncome >= 90_000)  score += 16
+  else if (demo.medianHouseholdIncome >= 70_000)  score += 12
+  else if (demo.medianHouseholdIncome >= 50_000)  score += 7
+  else                                              score += 3
+
+  return { score: Math.min(100, score), hasData: true }
+}
+
+// ── Anchor Tenant Score (identical logic to ListOps) ──────────
+
+const BIG_BOX = new Set(['big_box'])
+
+export function scoreAnchorTenants(
+  retailers: Retailer[]
+): { score: number; hasData: boolean; anchors: Array<{ name: string; distanceMiles: number; impact: string }> } {
+  if (!retailers.length) return { score: 50, hasData: false, anchors: [] }
+
+  let score = 50
+  const anchors: Array<{ name: string; distanceMiles: number; impact: string }> = []
+
+  for (const r of retailers) {
+    const isClose = r.distanceMiles <= 0.5
+    const isNearby = r.distanceMiles <= 1.0
+    let points = 0
+    let impact = 'neutral'
+
+    if (BIG_BOX.has(r.category) && isClose) { points = 18; impact = 'positive' }
+    else if (BIG_BOX.has(r.category) && isNearby) { points = 12; impact = 'positive' }
+    else if (BIG_BOX.has(r.category)) { points = 6; impact = 'positive' }
+    else if (r.category === 'grocery' && isClose) { points = 12; impact = 'positive' }
+    else if (r.category === 'grocery' && isNearby) { points = 8; impact = 'positive' }
+    else if (r.category === 'fast_casual' && isClose) { points = 6; impact = 'positive' }
+    else if (r.category === 'pharmacy' && isClose) { points = 5; impact = 'positive' }
+    else if (r.category === 'fast_food' && isClose) { points = -2; impact = 'negative' }
+
+    score = Math.max(0, Math.min(100, score + points))
+    if (points !== 0) anchors.push({ name: r.name, distanceMiles: r.distanceMiles, impact })
+  }
+
+  return { score: Math.min(100, score), hasData: true, anchors }
+}
+
+// ── Flood Risk Score (new — high value for FL investors) ─────
+// Framed positively as "resilience": lower flood exposure = higher score.
+
+export function scoreFloodRisk(flood: FloodZoneResult | null): { score: number; hasData: boolean } {
+  if (!flood) return { score: 55, hasData: false } // neutral default, weight redistributed
+
+  const zone = flood.zone.toUpperCase()
+  let score: number
+  if (zone === 'X' && !flood.isSpecialFloodHazardArea) score = 100
+  else if (zone.startsWith('X')) score = 78 // shaded X — 500yr floodplain
+  else if (zone === 'AH' || zone === 'AO') score = 60
+  else if (zone === 'VE') score = 25 // coastal high-hazard, wave action
+  else if (zone.startsWith('A')) score = 45 // A, AE — high-risk, no wave action
+  else score = 55
+
+  return { score, hasData: true }
+}
+
+// ── Crime Context Score (new — deliberately conservative) ─────
+// Jurisdiction-level data is coarse, not hyperlocal — this category is
+// intentionally lower-weighted and scores primarily off trend direction
+// rather than pretending false precision from an absolute count.
+
+export function scoreCrimeContext(crime: CrimeContext | null): { score: number; hasData: boolean } {
+  if (!crime || crime.trend === 'unknown') return { score: 55, hasData: false }
+
+  const score = crime.trend === 'improving' ? 70 : crime.trend === 'flat' ? 55 : 40
+  return { score, hasData: true }
+}
+
+// ── Weights + redistribution ───────────────────────────────────
+
+export interface GradeWeights {
+  traffic: number
+  consumerSpend: number
+  demographics: number
+  anchorTenant: number
+  floodRisk: number
+  crime: number
+}
+
+export const DEFAULT_WEIGHTS: GradeWeights = {
+  traffic: 0.22,
+  consumerSpend: 0.18,
+  demographics: 0.22,
+  anchorTenant: 0.18,
+  floodRisk: 0.12,
+  crime: 0.08,
+}
+
+export const CATEGORY_LABELS: Record<keyof GradeWeights, string> = {
+  traffic: 'Traffic Exposure',
+  consumerSpend: 'Spending Power (Est.)',
+  demographics: 'Demographics',
+  anchorTenant: 'Anchor Tenants & Retail',
+  floodRisk: 'Flood Resilience',
+  crime: 'Safety Context',
+}
+
+/**
+ * When a category has no data, redistribute its weight proportionally
+ * across the remaining categories so missing free-data coverage doesn't
+ * unfairly tank the score.
+ */
+export function redistributeWeights(
+  weights: GradeWeights,
+  missing: Array<keyof GradeWeights>
+): GradeWeights {
+  if (!missing.length) return weights
+
+  const missingWeight = missing.reduce((sum, k) => sum + weights[k], 0)
+  const remaining = 1 - missingWeight
+  const factor = remaining > 0 ? 1 / remaining : 1
+
+  const result = { ...weights }
+  for (const key of Object.keys(result) as Array<keyof GradeWeights>) {
+    result[key] = missing.includes(key) ? 0 : result[key] * factor
+  }
+  return result
+}
+
+export function computeOverallScore(
+  scores: Record<keyof GradeWeights, number>,
+  weights: GradeWeights
+): number {
+  return (Object.keys(weights) as Array<keyof GradeWeights>).reduce(
+    (sum, key) => sum + scores[key] * weights[key],
+    0
+  )
+}
+
+// ── AI Narrative Generation ───────────────────────────────────
+
+export interface GradeNarrative {
+  summary: string
+  strengths: string[]
+  risks: string[]
+  recommendation: string
+  tokensUsed: number
+}
+
+export async function generateGradeNarrative(opts: {
+  address: string
+  overallGrade: string
+  overallScore: number
+  categoryScores: Record<keyof GradeWeights, number>
+  anchors: Array<{ name: string; distanceMiles: number; impact: string }>
+  demographics: TractDemographics | null
+  trafficCounts: TrafficCount[]
+  flood: FloodZoneResult | null
+  crime: CrimeContext | null
+  spendEstimate: SpendEstimate | null
+}): Promise<GradeNarrative> {
+  const topTraffic = opts.trafficCounts.slice(0, 2)
+
+  const prompt = `You are a senior commercial real estate analyst writing for investors and business owners evaluating a Florida property — NOT for a licensed appraisal. Never use the words "appraisal," "appraised value," or "valuation." This is a Site Quality Score, a due-diligence starting point.
+
+Property: ${opts.address}
+Overall Site Quality Score: ${opts.overallGrade} (${opts.overallScore.toFixed(1)}/100)
+
+Category scores:
+- Traffic: ${opts.categoryScores.traffic.toFixed(1)}/100 — ${topTraffic.map(t => `${t.roadway ?? 'nearby road'} (${t.aadt.toLocaleString()} AADT)`).join(', ') || 'no traffic count data available'}
+- Estimated spending power: ${opts.categoryScores.consumerSpend.toFixed(1)}/100${opts.spendEstimate ? ` — est. $${(opts.spendEstimate.estimatedTradeAreaSpendTotal / 1_000_000).toFixed(0)}M annual trade-area spend (estimated, not reported)` : ''}
+- Demographics: ${opts.categoryScores.demographics.toFixed(1)}/100${opts.demographics ? ` — ${opts.demographics.population.toLocaleString()} pop, ${opts.demographics.populationGrowth5yr}% 5yr growth, median income $${opts.demographics.medianHouseholdIncome.toLocaleString()}, median age ${opts.demographics.medianAge}` : ''}
+- Anchor tenants/retail density: ${opts.categoryScores.anchorTenant.toFixed(1)}/100 — ${opts.anchors.length ? opts.anchors.map(a => `${a.name} (${a.distanceMiles}mi, ${a.impact})`).join(', ') : 'no major anchors detected nearby'}
+- Flood resilience: ${opts.categoryScores.floodRisk.toFixed(1)}/100${opts.flood ? ` — FEMA zone ${opts.flood.zone}, ${opts.flood.isSpecialFloodHazardArea ? 'within' : 'outside'} the Special Flood Hazard Area` : ' — no FEMA flood zone data available'}
+- Safety context: ${opts.categoryScores.crime.toFixed(1)}/100${opts.crime ? ` — ${opts.crime.agencyName}, trend ${opts.crime.trend}` : ' — jurisdiction-level crime data not available for this area'}
+
+Respond in this exact JSON format (no markdown, no prose outside JSON):
+{
+  "summary": "2-3 sentence executive summary written for an investor or business owner deciding whether this site is worth pursuing",
+  "strengths": ["strength 1", "strength 2", "strength 3"],
+  "risks": ["risk 1", "risk 2"],
+  "recommendation": "1 sentence next-step recommendation (e.g. 'worth an in-person site visit and formal due diligence' — never a buy/pass verdict framed as professional advice)"
+}`
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 800,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  const tokensUsed = (response.usage.input_tokens ?? 0) + (response.usage.output_tokens ?? 0)
+  const raw = response.content
+    .filter((b) => b.type === 'text')
+    .map((b) => (b as { type: 'text'; text: string }).text)
+    .join('')
+    .replace(/^```json\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+
+  try {
+    const parsed = JSON.parse(raw)
+    return {
+      summary: parsed.summary ?? '',
+      strengths: parsed.strengths ?? [],
+      risks: parsed.risks ?? [],
+      recommendation: parsed.recommendation ?? '',
+      tokensUsed,
+    }
+  } catch {
+    return {
+      summary: `This site scored ${opts.overallGrade} (${opts.overallScore.toFixed(1)}/100) on our Site Quality Score.`,
+      strengths: [],
+      risks: [],
+      recommendation: 'Manual review recommended.',
+      tokensUsed,
+    }
+  }
+}
