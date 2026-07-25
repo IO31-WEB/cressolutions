@@ -5,8 +5,8 @@ import {
   doublePrecision,
   jsonb,
   serial,
-  boolean,
   integer,
+  boolean,
   index,
 } from 'drizzle-orm/pg-core'
 
