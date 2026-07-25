@@ -9,6 +9,7 @@
 
 import type { GradeWeights } from './grader'
 import { CATEGORY_LABELS, scoreToGrade } from './grader'
+import { LOGO_DATA_URI } from './logo'
 
 interface TemplateData {
   formattedAddress: string
@@ -198,7 +199,7 @@ export function renderReportHtml(data: TemplateData): string {
     padding: 48px 56px 40px;
     position: relative;
   }
-  .cover .brand { position: absolute; top: 44px; right: 56px; font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 2px; color: rgba(255,255,255,0.55); }
+  .cover .brand-logo { position: absolute; top: 36px; right: 56px; height: 64px; width: 64px; border-radius: 50%; }
   .cover .eyebrow { font-family: 'Inter', sans-serif; letter-spacing: 3px; text-transform: uppercase; font-size: 11px; color: var(--gold); margin-bottom: 16px; }
   .cover h1 { font-size: 28px; margin: 0 0 8px; font-weight: 600; line-height: 1.25; }
   .cover .address { font-family: 'Inter', sans-serif; font-size: 13.5px; color: rgba(255,255,255,0.7); margin-bottom: 30px; }
@@ -238,7 +239,7 @@ export function renderReportHtml(data: TemplateData): string {
 </head>
 <body>
   <div class="cover">
-    <div class="brand">CRESSOLUTIONS</div>
+    <img class="brand-logo" src="${LOGO_DATA_URI}" alt="CRES Solutions" />
     <div class="eyebrow">Site Quality Report</div>
     <h1>Commercial Property Analysis</h1>
     <div class="address">${formattedAddress} &nbsp;·&nbsp; Prepared ${generatedDate}</div>
