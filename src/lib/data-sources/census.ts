@@ -58,7 +58,7 @@ export async function geocodeWithCensus(address: string): Promise<CensusGeograph
   url.searchParams.set('address', address)
   url.searchParams.set('benchmark', 'Public_AR_Current')
   url.searchParams.set('vintage', 'Current_Current')
-  url.searchParams.set('layers', '10') // Census Tracts layer
+  url.searchParams.set('layers', '8') // Census Tracts layer (verify against https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer if this ever breaks again)
   url.searchParams.set('format', 'json')
 
   const res = await fetch(url.toString())
