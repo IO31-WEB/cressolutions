@@ -12,6 +12,11 @@ import type { GradeWeights } from '@/lib/grader'
 // cheap to run even on repeat downloads of the same report.
 export const maxDuration = 60
 
+// We only need to render/print HTML, not run WebGL — disabling graphics
+// mode skips extracting the swiftshader/ANGLE libraries, which shrinks
+// the cold-start extraction work in the serverless environment.
+chromium.setGraphicsMode = false
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const reportId = Number(id)
@@ -37,10 +42,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   })
 
   const browser = await puppeteer.launch({
-    args: chromium.args,
+    args: await puppeteer.defaultArgs({ args: chromium.args, headless: 'shell' }),
     defaultViewport: { width: 1200, height: 1600 },
     executablePath: await chromium.executablePath(),
-    headless: true,
+    headless: 'shell',
   })
 
   try {
