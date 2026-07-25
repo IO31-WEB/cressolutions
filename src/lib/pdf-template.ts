@@ -27,7 +27,7 @@ interface TemplateData {
       ownerOccupiedPct: number
       bachelorsPlusPct: number
     } | null
-    trafficCounts: Array<{ aadt: number; roadway: string | null; distanceMiles: number }>
+    trafficCounts: Array<{ aadt: number; roadway: string | null; descFrom: string | null; descTo: string | null; distanceMiles: number }>
     anchors: Array<{ name: string; distanceMiles: number; impact: string }>
     flood: { zone: string; isSpecialFloodHazardArea: boolean; description: string } | null
     crime: { agencyName: string; trend: string } | null
@@ -125,9 +125,15 @@ export function renderReportHtml(data: TemplateData): string {
     </div>`
     : `<p class="muted">Demographic data unavailable for this location.</p>`
 
+  const describeSegment = (t: TemplateData['rawData']['trafficCounts'][number]): string => {
+    if (t.descFrom && t.descTo) return `${t.descFrom} to ${t.descTo}`
+    if (t.descFrom) return `near ${t.descFrom}`
+    return 'nearby roadway segment'
+  }
+
   const trafficBlock = rawData.trafficCounts.length
     ? `<ul class="plain-list">${rawData.trafficCounts.slice(0, 3).map(t =>
-        `<li><strong>${t.aadt.toLocaleString()} AADT</strong> — ${t.roadway ?? 'nearby roadway'} (${t.distanceMiles} mi)</li>`
+        `<li><strong>${t.aadt.toLocaleString()} AADT</strong> — ${describeSegment(t)} (${t.distanceMiles} mi)</li>`
       ).join('')}</ul>`
     : `<p class="muted">No FDOT traffic count stations within range of this address.</p>`
 
@@ -199,7 +205,7 @@ export function renderReportHtml(data: TemplateData): string {
     padding: 48px 56px 40px;
     position: relative;
   }
-  .cover .brand-logo { position: absolute; top: 36px; right: 56px; height: 64px; width: 64px; border-radius: 50%; }
+  .cover .brand-logo { position: absolute; top: 32px; right: 56px; height: 84px; width: 84px; object-fit: contain; }
   .cover .eyebrow { font-family: 'Inter', sans-serif; letter-spacing: 3px; text-transform: uppercase; font-size: 11px; color: var(--gold); margin-bottom: 16px; }
   .cover h1 { font-size: 28px; margin: 0 0 8px; font-weight: 600; line-height: 1.25; }
   .cover .address { font-family: 'Inter', sans-serif; font-size: 13.5px; color: rgba(255,255,255,0.7); margin-bottom: 30px; }
@@ -212,6 +218,7 @@ export function renderReportHtml(data: TemplateData): string {
   .chip-label { font-size: 10px; color: rgba(255,255,255,0.65); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
   .content { padding: 36px 56px 8px; }
   section { margin-bottom: 30px; page-break-inside: avoid; }
+  section.page-start { page-break-before: always; padding-top: 34px; }
   h2 { font-size: 16px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--navy); border-bottom: 2px solid var(--gold); padding-bottom: 8px; margin-bottom: 16px; }
   h3 { font-size: 12.5px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--navy); margin: 0 0 8px; }
   .cat-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-family: 'Inter', sans-serif; page-break-inside: avoid; }
@@ -259,7 +266,7 @@ export function renderReportHtml(data: TemplateData): string {
       ${categoryRows}
     </section>
 
-    <section>
+    <section class="page-start">
       <h2>Executive Summary</h2>
       ${narrativeBlock}
     </section>
@@ -274,7 +281,7 @@ export function renderReportHtml(data: TemplateData): string {
       ${demoBlock}
     </section>
 
-    <section>
+    <section class="page-start">
       <h2>Estimated Spending Power</h2>
       ${spendBlock}
     </section>
