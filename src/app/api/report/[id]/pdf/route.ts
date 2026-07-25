@@ -17,6 +17,23 @@ export const maxDuration = 60
 // the cold-start extraction work in the serverless environment.
 chromium.setGraphicsMode = false
 
+// @sparticuz/chromium only extracts its al2/al2023 shared-library tarball
+// (and only configures LD_LIBRARY_PATH to point at it) when it detects
+// AWS_EXECUTION_ENV / AWS_LAMBDA_JS_RUNTIME / CODEBUILD_BUILD_IMAGE env vars
+// (see node_modules/@sparticuz/chromium/build/{index,helper}.js). Vercel's
+// function runtime doesn't set any of those, so on Vercel the libraries are
+// never extracted at all — not a path problem, they're just missing —
+// which is exactly why launching Chromium fails with
+// "libnss3.so: cannot open shared object file". We spoof the env var so
+// the library's own detection extracts the al2023 (Node 20+) build, and
+// mirror its LD_LIBRARY_PATH setup so the dynamic linker finds it.
+process.env.AWS_EXECUTION_ENV ??= 'AWS_Lambda_nodejs20.x'
+process.env.FONTCONFIG_PATH ??= '/tmp/fonts'
+const chromiumLibPath = '/tmp/al2023/lib'
+process.env.LD_LIBRARY_PATH = process.env.LD_LIBRARY_PATH
+  ? `${chromiumLibPath}:${process.env.LD_LIBRARY_PATH}`
+  : chromiumLibPath
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const reportId = Number(id)
