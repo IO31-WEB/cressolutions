@@ -204,6 +204,34 @@ async function fetchAgencyCrime(
  * Returns null gracefully when the county isn't mapped, the key is missing,
  * or both primary and fallback ORIs return no data.
  */
+
+async function fetchStateOffenseSummary(
+  offense: 'violent-crime' | 'property-crime'
+): Promise<YearCount[]> {
+  if (!FBI_API_KEY) return []
+  const toYear = new Date().getFullYear() - 1
+  const fromYear = toYear - 4
+  const url =
+    `https://api.usa.gov/crime/fbi/cde/summarized/state/FL/${offense}` +
+    `?from=01-${fromYear}&to=12-${toYear}&API_KEY=${FBI_API_KEY}`
+  try {
+    const res = await fetch(url)
+    if (!res.ok) {
+      console.error(`CDE state crime API ${res.status} for FL/${offense}:`, (await res.text()).slice(0, 300))
+      return []
+    }
+    const data = await res.json()
+    const parsed = parseYearCounts(data)
+    if (!parsed.length) {
+      console.warn(`CDE state OK but unparseable for FL/${offense}:`, JSON.stringify(data).slice(0, 500))
+    }
+    return parsed
+  } catch (e) {
+    console.error('CDE state network error', e)
+    return []
+  }
+}
+
 export async function getCrimeContext(countyFips: string): Promise<CrimeContext | null> {
   if (!FBI_API_KEY) {
     console.warn('FBI_CRIME_API_KEY not set — safety context skipped')
@@ -226,8 +254,38 @@ export async function getCrimeContext(countyFips: string): Promise<CrimeContext 
     if (fallbackResult) return fallbackResult
   }
 
+  // Last resort: Florida statewide estimates so Safety is not blank for FL sites
+  // when local ORIs return nothing (common for NIBRS-only agencies).
   console.warn(
-    `No crime data for county FIPS ${countyFips} (tried ${primary.ori}${fallback ? ` and ${fallback.ori}` : ''})`
+    `Agency ORIs returned no data for FIPS ${countyFips}; trying FL statewide estimates`
+  )
+  const stateCounts = await fetchStateOffenseSummary('violent-crime')
+  const stateProp = await fetchStateOffenseSummary('property-crime')
+  const latestV = [...stateCounts].sort((a, b) => b.data_year - a.data_year)[0]
+  const latestP = [...stateProp].sort((a, b) => b.data_year - a.data_year)[0]
+  if (latestV || latestP) {
+    const priorV = stateCounts.find((v) => v.data_year === (latestV?.data_year ?? 0) - 1)
+    let trend: CrimeContext['trend'] = 'unknown'
+    if (latestV && priorV && priorV.actual > 0) {
+      const delta = latestV.actual - priorV.actual
+      trend =
+        Math.abs(delta) < priorV.actual * 0.03
+          ? 'flat'
+          : delta < 0
+            ? 'improving'
+            : 'worsening'
+    }
+    return {
+      agencyName: 'State of Florida (statewide estimate)',
+      violentCrimeCount: latestV?.actual ?? null,
+      propertyCrimeCount: latestP?.actual ?? null,
+      year: latestV?.data_year ?? latestP?.data_year ?? null,
+      trend,
+    }
+  }
+
+  console.warn(
+    `No crime data for county FIPS ${countyFips} (tried ${primary.ori}${fallback ? ` and ${fallback.ori}` : ''} and FL state)`
   )
   return null
 }
