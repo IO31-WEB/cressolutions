@@ -220,7 +220,18 @@ export function renderReportHtml(data: TemplateData): string {
     padding: 48px 56px 40px;
     position: relative;
   }
-  .cover .brand-logo { position: absolute; top: 32px; right: 56px; height: 84px; width: 84px; object-fit: contain; }
+  .cover .brand-logo {
+    position: absolute;
+    top: 28px;
+    right: 48px;
+    height: 96px;
+    width: 96px;
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    padding: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+  }
   .cover .eyebrow { font-family: 'Inter', sans-serif; letter-spacing: 3px; text-transform: uppercase; font-size: 11px; color: var(--gold); margin-bottom: 16px; }
   .cover h1 { font-size: 28px; margin: 0 0 8px; font-weight: 600; line-height: 1.25; }
   .cover .address { font-family: 'Inter', sans-serif; font-size: 13.5px; color: rgba(255,255,255,0.7); margin-bottom: 30px; }
