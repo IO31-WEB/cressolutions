@@ -211,12 +211,12 @@ export function renderReportHtml(data: TemplateData): string {
     background: var(--bg);
   }
   .sans { font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; }
+  @page { margin-top: 0; }
+  @page :first { margin-top: 0; }
   .cover {
     background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
     color: white;
-    /* Pull into the PDF top margin so page 1 is full-bleed navy;
-       body pages still get the 32px top margin for consistent spacing. */
-    margin: -32px 0 0 0;
+    margin: 0;
     padding: 48px 56px 40px;
     position: relative;
   }
@@ -231,11 +231,12 @@ export function renderReportHtml(data: TemplateData): string {
   .chip { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 16px; font-family: 'Inter', sans-serif; }
   .chip-value { font-size: 16px; font-weight: 700; color: var(--gold); }
   .chip-label { font-size: 10px; color: rgba(255,255,255,0.65); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .content { padding: 28px 56px 8px; }
-  /* Keep sections together when possible, but don't force tiny orphans onto
-     their own page with zero top padding — page margin handles spacing. */
-  section { margin-bottom: 28px; page-break-inside: avoid; padding-top: 4px; }
-  section.page-start { page-break-before: always; padding-top: 8px; }
+  .content { padding: 32px 56px 12px; }
+  /* When a section is pushed alone onto a new page, its own padding-top
+     provides the header spacing (PDF top margin is 0 for full-bleed cover). */
+  section { margin-bottom: 26px; page-break-inside: avoid; padding-top: 28px; }
+  .content > section:first-child { padding-top: 4px; }
+  section.page-start { page-break-before: always; padding-top: 32px; }
   h2 { font-size: 16px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--navy); border-bottom: 2px solid var(--gold); padding-bottom: 8px; margin-bottom: 16px; }
   h3 { font-size: 12.5px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--navy); margin: 0 0 8px; }
   .cat-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-family: 'Inter', sans-serif; page-break-inside: avoid; }
