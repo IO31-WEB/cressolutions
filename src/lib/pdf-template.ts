@@ -214,6 +214,9 @@ export function renderReportHtml(data: TemplateData): string {
   .cover {
     background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
     color: white;
+    /* Pull into the PDF top margin so page 1 is full-bleed navy;
+       body pages still get the 32px top margin for consistent spacing. */
+    margin: -32px 0 0 0;
     padding: 48px 56px 40px;
     position: relative;
   }
