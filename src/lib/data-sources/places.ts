@@ -24,6 +24,8 @@ export interface Retailer {
   name: string
   distanceMiles: number
   category: RetailerCategory
+  lat: number
+  lng: number
 }
 
 export class PlacesError extends Error {
@@ -143,6 +145,8 @@ export async function getNearbyRetailers(lat: number, lng: number): Promise<Reta
         name,
         distanceMiles: Math.round(haversineMiles(lat, lng, placeLat, placeLng) * 100) / 100,
         category,
+        lat: placeLat,
+        lng: placeLng,
       }
     })
     .filter((r): r is Retailer => r !== null)
