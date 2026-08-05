@@ -46,6 +46,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Report not found' }, { status: 404 })
   }
 
+  const rawData = report.rawData as any
+  const mapImageDataUri = await fetchStaticMapDataUri(
+    report.lat,
+    report.lng,
+    (rawData?.anchors ?? []).filter((a: any) => a.lat != null && a.lng != null).slice(0, 8)
+  )
+
   const html = renderReportHtml({
     formattedAddress: report.formattedAddress,
     overallGrade: report.overallGrade,
@@ -54,8 +61,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     generatedDate: report.createdAt.toLocaleDateString('en-US', {
       year: 'numeric', month: 'long', day: 'numeric',
     }),
-    rawData: report.rawData as any,
+    rawData,
     narrative: report.narrative as any,
+    mapImageDataUri,
   })
 
   const browser = await puppeteer.launch({
@@ -96,5 +104,48 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     })
   } finally {
     await browser.close()
+  }
+}
+
+/**
+ * Google Static Maps — one image request per PDF. Requires Maps Static API
+ * enabled on the same GOOGLE_API_KEY used for Geocoding/Places. Returns null
+ * on any failure so the PDF still renders without the map section.
+ */
+async function fetchStaticMapDataUri(
+  lat: number,
+  lng: number,
+  anchors: Array<{ lat: number; lng: number; name?: string }>
+): Promise<string | null> {
+  const key = process.env.GOOGLE_API_KEY
+  if (!key) return null
+
+  try {
+    const params = new URLSearchParams({
+      center: `${lat},${lng}`,
+      zoom: '14',
+      size: '640x360',
+      scale: '2',
+      maptype: 'roadmap',
+      key,
+    })
+    // Subject property — red pin
+    params.append('markers', `color:0xB3402E|size:mid|${lat},${lng}`)
+    // Nearby anchors — gold pins (limit to keep URL under ~8k chars)
+    for (const a of anchors.slice(0, 6)) {
+      params.append('markers', `color:0xC9A961|size:small|${a.lat},${a.lng}`)
+    }
+
+    const res = await fetch(`https://maps.googleapis.com/maps/api/staticmap?${params}`)
+    if (!res.ok) {
+      console.error(`Static Maps API failed: ${res.status}`, await res.text().catch(() => ''))
+      return null
+    }
+    const buf = Buffer.from(await res.arrayBuffer())
+    const contentType = res.headers.get('content-type') || 'image/png'
+    return `data:${contentType};base64,${buf.toString('base64')}`
+  } catch (err) {
+    console.error('Static Maps fetch error', err)
+    return null
   }
 }
