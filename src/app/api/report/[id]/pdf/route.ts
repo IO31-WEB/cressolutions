@@ -91,11 +91,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           </div>
           <div><span class="pageNumber"></span> of <span class="totalPages"></span></div>
         </div>`,
-      // Top margin keeps a consistent gap on every page (including when a
-      // short section like Safety Context lands alone at the top of a page).
-      // Cover still looks full-bleed because its navy block starts immediately
-      // inside the content box; body pages get the same ~32px breathing room.
-      margin: { top: '32px', bottom: '60px', left: '0', right: '0' },
+      // Top margin must stay 0 so the navy cover is full-bleed on page 1.
+      // Body-page top spacing comes from section padding in the HTML/CSS.
+      margin: { top: '0', bottom: '60px', left: '0', right: '0' },
     })
 
     const filename = `site-quality-report-${report.formattedAddress.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`
