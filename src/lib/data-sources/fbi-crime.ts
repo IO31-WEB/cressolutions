@@ -106,6 +106,37 @@ function parseYearCounts(data: unknown): YearCount[] {
   return []
 }
 
+async function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+async function fetchJsonWithRetry(url: string, label: string, attempts = 3): Promise<unknown | null> {
+  let lastErr = ''
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: 'application/json' },
+      })
+      if (res.ok) {
+        return await res.json()
+      }
+      lastErr = `${res.status} ${await res.text().catch(() => '')}`
+      // Retry on 503 / 429 / 502
+      if (![429, 502, 503, 504].includes(res.status)) {
+        console.error(`CDE ${label}: ${lastErr.slice(0, 300)}`)
+        return null
+      }
+      console.warn(`CDE ${label} attempt ${i + 1}/${attempts}: ${res.status}, retrying…`)
+    } catch (e) {
+      lastErr = String(e)
+      console.warn(`CDE ${label} attempt ${i + 1}/${attempts} network error:`, e)
+    }
+    await sleep(800 * (i + 1))
+  }
+  console.error(`CDE ${label} failed after ${attempts} attempts:`, lastErr.slice(0, 300))
+  return null
+}
+
 async function fetchOffenseSummary(
   ori: string,
   offense: 'violent-crime' | 'property-crime'
@@ -115,41 +146,29 @@ async function fetchOffenseSummary(
   const toYear = new Date().getFullYear() - 1
   const fromYear = toYear - 4
 
-  // Primary: current CDE summarized agency endpoint
+  // Primary: CDE summarized agency
   const cdeUrl =
     `https://api.usa.gov/crime/fbi/cde/summarized/agency/${ori}/${offense}` +
     `?from=01-${fromYear}&to=12-${toYear}&API_KEY=${FBI_API_KEY}`
 
-  try {
-    const res = await fetch(cdeUrl)
-    if (res.ok) {
-      const data = await res.json()
-      const parsed = parseYearCounts(data)
-      if (parsed.length) return parsed
-      console.warn(
-        `CDE returned OK but no parseable counts for ${ori}/${offense}`,
-        JSON.stringify(data).slice(0, 400)
-      )
-    } else {
-      const body = await res.text().catch(() => '')
-      console.error(`CDE crime API ${res.status} for ${ori}/${offense}:`, body.slice(0, 300))
-    }
-  } catch (e) {
-    console.error(`CDE crime API network error for ${ori}/${offense}:`, e)
+  const cdeData = await fetchJsonWithRetry(cdeUrl, `${ori}/${offense}`)
+  if (cdeData) {
+    const parsed = parseYearCounts(cdeData)
+    if (parsed.length) return parsed
+    console.warn(
+      `CDE returned OK but no parseable counts for ${ori}/${offense}`,
+      JSON.stringify(cdeData).slice(0, 400)
+    )
   }
 
-  // Fallback: legacy SAPI path (still works for some ORIs)
+  // Fallback: legacy SAPI path
   const sapiUrl =
     `https://api.usa.gov/crime/fbi/sapi/api/summarized/agencies/${ori}/${offense}` +
     `?api_key=${FBI_API_KEY}`
-  try {
-    const res = await fetch(sapiUrl)
-    if (res.ok) {
-      const data = await res.json()
-      return parseYearCounts(data)
-    }
-  } catch {
-    /* ignore */
+  const sapiData = await fetchJsonWithRetry(sapiUrl, `sapi:${ori}/${offense}`, 2)
+  if (sapiData) {
+    const parsed = parseYearCounts(sapiData)
+    if (parsed.length) return parsed
   }
 
   return []
