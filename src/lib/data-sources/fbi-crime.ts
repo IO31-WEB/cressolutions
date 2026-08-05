@@ -68,12 +68,63 @@ function parseYearCounts(data: unknown): YearCount[] {
       .filter((r) => Number.isFinite(r.data_year) && Number.isFinite(r.actual))
   }
 
-  // Shape B: { offenses: { actuals: { "2022": 123, ... } } } or similar CDE
+  // Shape B: { offenses: { actuals: { "2022": 123, ... } } } flat year→count
   const offenses = root.offenses as Record<string, unknown> | undefined
   if (offenses?.actuals && typeof offenses.actuals === 'object') {
-    return Object.entries(offenses.actuals as Record<string, unknown>)
+    const flat = Object.entries(offenses.actuals as Record<string, unknown>)
       .map(([year, val]) => ({ data_year: Number(year), actual: Number(val) }))
       .filter((r) => Number.isFinite(r.data_year) && Number.isFinite(r.actual))
+    if (flat.length) return flat
+  }
+
+  // Shape B2 (current CDE): { offenses: { rates: { "Florida Offenses": { "01-2021": 16.45, ... } } } }
+  // Monthly rates keyed MM-YYYY — average into yearly values for trend scoring.
+  if (offenses?.rates && typeof offenses.rates === 'object') {
+    const byYear = new Map<number, { sum: number; n: number }>()
+    for (const series of Object.values(offenses.rates as Record<string, unknown>)) {
+      if (!series || typeof series !== 'object') continue
+      for (const [key, val] of Object.entries(series as Record<string, unknown>)) {
+        // keys are "MM-YYYY" or "YYYY"
+        const m = key.match(/(?:^|-)(\d{4})$/)
+        if (!m) continue
+        const year = Number(m[1])
+        const rate = Number(val)
+        if (!Number.isFinite(year) || !Number.isFinite(rate)) continue
+        const cur = byYear.get(year) ?? { sum: 0, n: 0 }
+        cur.sum += rate
+        cur.n += 1
+        byYear.set(year, cur)
+      }
+    }
+    if (byYear.size) {
+      return Array.from(byYear.entries())
+        .map(([data_year, { sum, n }]) => ({
+          data_year,
+          // store average monthly rate * 100 so values are stable ints for display
+          actual: Math.round((sum / n) * 100),
+        }))
+        .filter((r) => Number.isFinite(r.actual))
+    }
+  }
+
+  // Shape B3: { offenses: { actuals: { "Agency Name": { "01-2021": n, ... } } } } nested monthly
+  if (offenses?.actuals && typeof offenses.actuals === 'object') {
+    const byYear = new Map<number, number>()
+    for (const series of Object.values(offenses.actuals as Record<string, unknown>)) {
+      if (series && typeof series === 'object' && !Array.isArray(series)) {
+        for (const [key, val] of Object.entries(series as Record<string, unknown>)) {
+          const m = key.match(/(?:^|-)(\d{4})$/)
+          if (!m) continue
+          const year = Number(m[1])
+          const v = Number(val)
+          if (!Number.isFinite(year) || !Number.isFinite(v)) continue
+          byYear.set(year, (byYear.get(year) ?? 0) + v)
+        }
+      }
+    }
+    if (byYear.size) {
+      return Array.from(byYear.entries()).map(([data_year, actual]) => ({ data_year, actual }))
+    }
   }
 
   // Shape C: top-level array of monthly/yearly rows
