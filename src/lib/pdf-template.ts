@@ -28,7 +28,7 @@ interface TemplateData {
       bachelorsPlusPct: number
     } | null
     trafficCounts: Array<{ aadt: number; roadway: string | null; descFrom: string | null; descTo: string | null; distanceMiles: number }>
-    anchors: Array<{ name: string; distanceMiles: number; impact: string }>
+    anchors: Array<{ name: string; distanceMiles: number; impact: string; lat?: number; lng?: number }>
     flood: { zone: string; isSpecialFloodHazardArea: boolean; description: string } | null
     crime: { agencyName: string; trend: string } | null
     spendEstimate: { estimatedAnnualHouseholdSpend: number; estimatedTradeAreaSpendTotal: number } | null
@@ -39,6 +39,8 @@ interface TemplateData {
     risks: string[]
     recommendation: string
   } | null
+  /** Optional base64 data-URI of a Google Static Map (property + nearby anchors). */
+  mapImageDataUri?: string | null
 }
 
 function gradeColor(grade: string): string {
@@ -93,7 +95,7 @@ function renderHighlights(rawData: TemplateData['rawData']): string {
 export function renderReportHtml(data: TemplateData): string {
   const {
     formattedAddress, overallGrade, overallScore, categoryScores,
-    generatedDate, rawData, narrative,
+    generatedDate, rawData, narrative, mapImageDataUri,
   } = data
 
   const categoryRows = (Object.keys(categoryScores) as Array<keyof GradeWeights>)
@@ -142,6 +144,16 @@ export function renderReportHtml(data: TemplateData): string {
         `<li><strong>${a.name}</strong> — ${a.distanceMiles} mi <span class="impact-${a.impact}">(${a.impact})</span></li>`
       ).join('')}</ul>`
     : `<p class="muted">No major anchor tenants detected within 1.5 miles.</p>`
+
+  const mapBlock = mapImageDataUri
+    ? `<div class="map-wrap">
+        <img class="site-map" src="${mapImageDataUri}" alt="Site location and nearby retail" />
+        <div class="map-legend">
+          <span class="legend-item"><span class="legend-dot legend-subject"></span> Subject property</span>
+          <span class="legend-item"><span class="legend-dot legend-anchor"></span> Nearby anchors / retail</span>
+        </div>
+      </div>`
+    : ''
 
   const floodBlock = rawData.flood
     ? `<div class="callout ${rawData.flood.isSpecialFloodHazardArea ? 'callout-warn' : 'callout-good'}">
@@ -242,6 +254,13 @@ export function renderReportHtml(data: TemplateData): string {
   .summary { font-size: 14px; line-height: 1.65; font-family: 'Inter', sans-serif; }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin: 16px 0; }
   .muted { color: var(--muted); font-family: 'Inter', sans-serif; font-size: 12.5px; }
+  .map-wrap { margin-top: 14px; page-break-inside: avoid; }
+  .site-map { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  .map-legend { display: flex; gap: 20px; margin-top: 8px; font-family: 'Inter', sans-serif; font-size: 11px; color: var(--muted); }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .legend-subject { background: #B3402E; }
+  .legend-anchor { background: #C9A961; }
 </style>
 </head>
 <body>
@@ -287,7 +306,8 @@ export function renderReportHtml(data: TemplateData): string {
     </section>
 
     <section>
-      <h2>Anchor Tenants &amp; Nearby Retail</h2>
+      <h2>Location Map &amp; Nearby Retail</h2>
+      ${mapBlock}
       ${anchorsBlock}
     </section>
 
