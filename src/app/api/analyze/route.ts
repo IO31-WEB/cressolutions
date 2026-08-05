@@ -74,10 +74,12 @@ export async function POST(req: NextRequest) {
   // Fan out to every free data source in parallel. Each is wrapped so one
   // source going down doesn't take out the whole report — missing data
   // gets redistributed in the scoring weights instead.
+  // Demographics need tract FIPS (available from Census address match OR
+  // the coordinates reverse-lookup after a Google fallback).
   const [demographics, retailers, trafficCounts, flood, crime] = await Promise.all([
-    geo.usedFallback
-      ? Promise.resolve(null)
-      : getTractDemographics(geo).catch(() => null),
+    geo.tractFips && geo.stateFips && geo.countyFips
+      ? getTractDemographics(geo).catch(() => null)
+      : Promise.resolve(null),
     getNearbyRetailers(geo.lat, geo.lng).catch(() => []),
     getNearbyTrafficCounts(geo.lat, geo.lng).catch(() => []),
     getFloodZone(geo.lat, geo.lng).catch(() => null),
