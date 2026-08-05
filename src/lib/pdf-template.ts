@@ -228,9 +228,11 @@ export function renderReportHtml(data: TemplateData): string {
   .chip { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 16px; font-family: 'Inter', sans-serif; }
   .chip-value { font-size: 16px; font-weight: 700; color: var(--gold); }
   .chip-label { font-size: 10px; color: rgba(255,255,255,0.65); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .content { padding: 36px 56px 8px; }
-  section { margin-bottom: 30px; page-break-inside: avoid; }
-  section.page-start { page-break-before: always; padding-top: 34px; }
+  .content { padding: 28px 56px 8px; }
+  /* Keep sections together when possible, but don't force tiny orphans onto
+     their own page with zero top padding — page margin handles spacing. */
+  section { margin-bottom: 28px; page-break-inside: avoid; padding-top: 4px; }
+  section.page-start { page-break-before: always; padding-top: 8px; }
   h2 { font-size: 16px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--navy); border-bottom: 2px solid var(--gold); padding-bottom: 8px; margin-bottom: 16px; }
   h3 { font-size: 12.5px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--navy); margin: 0 0 8px; }
   .cat-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-family: 'Inter', sans-serif; page-break-inside: avoid; }
@@ -261,6 +263,8 @@ export function renderReportHtml(data: TemplateData): string {
   .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   .legend-subject { background: #B3402E; }
   .legend-anchor { background: #C9A961; }
+  /* Prefer keeping flood + safety on the same page when both are short */
+  .safety-section { page-break-before: avoid; }
 </style>
 </head>
 <body>
@@ -316,7 +320,7 @@ export function renderReportHtml(data: TemplateData): string {
       ${floodBlock}
     </section>
 
-    <section>
+    <section class="safety-section">
       <h2>Safety Context</h2>
       ${crimeBlock}
     </section>
