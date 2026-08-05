@@ -124,13 +124,21 @@ export function scoreDemographics(demo: TractDemographics | null): { score: numb
 
 const BIG_BOX = new Set(['big_box'])
 
+export type ScoredAnchor = {
+  name: string
+  distanceMiles: number
+  impact: string
+  lat?: number
+  lng?: number
+}
+
 export function scoreAnchorTenants(
   retailers: Retailer[]
-): { score: number; hasData: boolean; anchors: Array<{ name: string; distanceMiles: number; impact: string }> } {
+): { score: number; hasData: boolean; anchors: ScoredAnchor[] } {
   if (!retailers.length) return { score: 50, hasData: false, anchors: [] }
 
   let score = 50
-  const anchors: Array<{ name: string; distanceMiles: number; impact: string }> = []
+  const anchors: ScoredAnchor[] = []
 
   for (const r of retailers) {
     const isClose = r.distanceMiles <= 0.5
@@ -148,7 +156,15 @@ export function scoreAnchorTenants(
     else if (r.category === 'fast_food' && isClose) { points = -2; impact = 'negative' }
 
     score = Math.max(0, Math.min(100, score + points))
-    if (points !== 0) anchors.push({ name: r.name, distanceMiles: r.distanceMiles, impact })
+    if (points !== 0) {
+      anchors.push({
+        name: r.name,
+        distanceMiles: r.distanceMiles,
+        impact,
+        lat: r.lat,
+        lng: r.lng,
+      })
+    }
   }
 
   return { score: Math.min(100, score), hasData: true, anchors }
@@ -178,9 +194,14 @@ export function scoreFloodRisk(flood: FloodZoneResult | null): { score: number; 
 // rather than pretending false precision from an absolute count.
 
 export function scoreCrimeContext(crime: CrimeContext | null): { score: number; hasData: boolean } {
-  if (!crime || crime.trend === 'unknown') return { score: 55, hasData: false }
+  // No agency data at all → redistribute weight away from this category
+  if (!crime) return { score: 55, hasData: false }
 
-  const score = crime.trend === 'improving' ? 70 : crime.trend === 'flat' ? 55 : 40
+  // We have jurisdiction data — score off trend when available, else neutral
+  const score =
+    crime.trend === 'improving' ? 70
+    : crime.trend === 'worsening' ? 40
+    : 55 // flat or unknown
   return { score, hasData: true }
 }
 
@@ -234,7 +255,7 @@ export async function generateGradeNarrative(opts: {
   overallGrade: string
   overallScore: number
   categoryScores: Record<keyof GradeWeights, number>
-  anchors: Array<{ name: string; distanceMiles: number; impact: string }>
+  anchors: ScoredAnchor[]
   demographics: TractDemographics | null
   trafficCounts: TrafficCount[]
   flood: FloodZoneResult | null
