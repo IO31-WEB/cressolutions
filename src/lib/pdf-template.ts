@@ -161,8 +161,11 @@ export function renderReportHtml(data: TemplateData): string {
       </div>`
     : `<p class="muted">FEMA flood zone data unavailable for this location.</p>`
 
+  const trendLabel = rawData.crime
+    ? rawData.crime.trend.charAt(0).toUpperCase() + rawData.crime.trend.slice(1)
+    : ''
   const crimeBlock = rawData.crime
-    ? `<p>${rawData.crime.agencyName} jurisdiction — crime trend: <strong>${rawData.crime.trend}</strong></p>`
+    ? `<p>${rawData.crime.agencyName} Jurisdiction — Crime Trend: <strong>${trendLabel}</strong></p>`
     : `<p class="muted">Jurisdiction-level crime data not yet available for this county.</p>`
 
   const spendBlock = rawData.spendEstimate
