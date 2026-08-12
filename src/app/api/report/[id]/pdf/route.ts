@@ -48,10 +48,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const rawData = report.rawData as any
+  const mapAnchors = [
+    ...(rawData?.synergyAnchors ?? rawData?.anchors ?? []),
+    ...(rawData?.saturationAnchors ?? []),
+  ]
   const mapImageDataUri = await fetchStaticMapDataUri(
     report.lat,
     report.lng,
-    (rawData?.anchors ?? []).filter((a: any) => a.lat != null && a.lng != null).slice(0, 8)
+    mapAnchors.filter((a: any) => a.lat != null && a.lng != null).slice(0, 8)
   )
 
   const html = renderReportHtml({
