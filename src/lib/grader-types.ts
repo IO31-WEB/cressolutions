@@ -12,25 +12,36 @@ export interface GradeWeights {
   traffic: number
   consumerSpend: number
   demographics: number
-  anchorTenant: number
+  retailSynergy: number
+  competitiveSaturation: number
   floodRisk: number
   crime: number
 }
 
+/**
+ * "Anchor Tenants & Retail" (single score, fast-food-is-always-bad) is
+ * replaced by two categories that can point in opposite directions for the
+ * same nearby business, depending on what the user is trying to build:
+ *  - retailSynergy: does nearby activity validate traffic/demand for THIS use?
+ *  - competitiveSaturation: is nearby activity direct competition for THIS use?
+ * See ./business-profiles.ts for how each business profile weights these.
+ */
 export const DEFAULT_WEIGHTS: GradeWeights = {
-  traffic: 0.22,
-  consumerSpend: 0.18,
-  demographics: 0.22,
-  anchorTenant: 0.18,
-  floodRisk: 0.12,
-  crime: 0.08,
+  traffic: 0.20,
+  consumerSpend: 0.16,
+  demographics: 0.20,
+  retailSynergy: 0.16,
+  competitiveSaturation: 0.10,
+  floodRisk: 0.11,
+  crime: 0.07,
 }
 
 export const CATEGORY_LABELS: Record<keyof GradeWeights, string> = {
   traffic: 'Traffic Exposure',
   consumerSpend: 'Spending Power (Est.)',
   demographics: 'Demographics',
-  anchorTenant: 'Anchor Tenants & Retail',
+  retailSynergy: 'Retail Synergy',
+  competitiveSaturation: 'Competitive Saturation',
   floodRisk: 'Flood Resilience',
   crime: 'Safety Context',
 }
