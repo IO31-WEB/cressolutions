@@ -29,7 +29,8 @@ interface TemplateData {
       bachelorsPlusPct: number
     } | null
     trafficCounts: Array<{ aadt: number; roadway: string | null; descFrom: string | null; descTo: string | null; distanceMiles: number }>
-    anchors: Array<{ name: string; distanceMiles: number; impact: string; lat?: number; lng?: number }>
+    synergyAnchors: Array<{ name: string; distanceMiles: number; impact: string; lat?: number; lng?: number }>
+    saturationAnchors: Array<{ name: string; distanceMiles: number; impact: string; lat?: number; lng?: number }>
     flood: { zone: string; isSpecialFloodHazardArea: boolean; description: string } | null
     crime: { agencyName: string; trend: string } | null
     spendEstimate: { estimatedAnnualHouseholdSpend: number; estimatedTradeAreaSpendTotal: number } | null
@@ -140,11 +141,20 @@ export function renderReportHtml(data: TemplateData): string {
       ).join('')}</ul>`
     : `<p class="muted">No FDOT traffic count stations within range of this address.</p>`
 
-  const anchorsBlock = rawData.anchors.length
-    ? `<ul class="plain-list">${rawData.anchors.slice(0, 8).map(a =>
-        `<li><strong>${a.name}</strong> — ${a.distanceMiles} mi <span class="impact-${a.impact}">(${a.impact})</span></li>`
+  const synergyAnchors = rawData.synergyAnchors ?? []
+  const saturationAnchors = rawData.saturationAnchors ?? []
+
+  const synergyBlock = synergyAnchors.length
+    ? `<ul class="plain-list">${synergyAnchors.slice(0, 10).map(a =>
+        `<li><strong>${a.name}</strong> — ${a.distanceMiles} mi <span class="impact-positive">(demand validator)</span></li>`
       ).join('')}</ul>`
-    : `<p class="muted">No major anchor tenants detected within 1.5 miles.</p>`
+    : `<p class="muted">No demand-validating businesses detected within 1.5 miles for this use.</p>`
+
+  const saturationBlock = saturationAnchors.length
+    ? `<ul class="plain-list">${saturationAnchors.slice(0, 10).map(a =>
+        `<li><strong>${a.name}</strong> — ${a.distanceMiles} mi <span class="impact-negative">(direct competitor)</span></li>`
+      ).join('')}</ul>`
+    : `<p class="muted">No direct competitors detected within 1.5 miles, or competitive saturation is not scored for this use.</p>`
 
   const mapBlock = mapImageDataUri
     ? `<div class="map-wrap">
@@ -306,6 +316,13 @@ export function renderReportHtml(data: TemplateData): string {
     <section>
       <h2>Score Breakdown</h2>
       ${categoryRows}
+      <p class="fine-print" style="margin-top:12px;">
+        <strong>Retail Synergy</strong> measures nearby businesses that validate consumer traffic and
+        demand for this specific use (e.g. national QSR, grocery, and hotel activity near a proposed
+        QSR site). <strong>Competitive Saturation</strong> measures nearby businesses that directly
+        compete with this specific use — a high Retail Synergy score and a low Competitive Saturation
+        score can occur on the same site at the same time, and both are shown separately below.
+      </p>
     </section>
 
     <section class="page-start">
@@ -329,9 +346,24 @@ export function renderReportHtml(data: TemplateData): string {
     </section>
 
     <section>
-      <h2>Location Map &amp; Nearby Retail</h2>
+      <h2>Location Map</h2>
       ${mapBlock}
-      ${anchorsBlock}
+    </section>
+
+    <section class="page-start">
+      <h2>Retail Synergy — Nearby Demand Validators</h2>
+      <p class="fine-print" style="margin-bottom:10px;">
+        Businesses nearby that support consumer traffic and demand for a ${businessProfileLabel} use.
+      </p>
+      ${synergyBlock}
+    </section>
+
+    <section>
+      <h2>Competitive Saturation — Nearby Competitors</h2>
+      <p class="fine-print" style="margin-bottom:10px;">
+        Businesses nearby that compete directly for the same customer as a ${businessProfileLabel} use.
+      </p>
+      ${saturationBlock}
     </section>
 
     <section>
