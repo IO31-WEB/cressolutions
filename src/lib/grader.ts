@@ -21,11 +21,28 @@ import {
   CATEGORY_LABELS,
   scoreToGrade,
 } from './grader-types'
+import {
+  type BusinessProfile,
+  type BusinessProfileId,
+  BUSINESS_PROFILES,
+  BUSINESS_PROFILE_LIST,
+  getBusinessProfile,
+  weightsForProfile,
+} from './business-profiles'
 
 // Re-exported so existing server-side imports of these from grader.ts
 // keep working. Client Components should import these directly from
-// './grader-types' instead, to avoid bundling the Anthropic SDK below.
+// './grader-types' or './business-profiles' instead, to avoid bundling the
+// Anthropic SDK below.
 export { type GradeWeights, DEFAULT_WEIGHTS, CATEGORY_LABELS, scoreToGrade }
+export {
+  type BusinessProfile,
+  type BusinessProfileId,
+  BUSINESS_PROFILES,
+  BUSINESS_PROFILE_LIST,
+  getBusinessProfile,
+  weightsForProfile,
+}
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -120,7 +137,20 @@ export function scoreDemographics(demo: TractDemographics | null): { score: numb
   return { score: Math.min(100, score), hasData: true }
 }
 
-// ── Anchor Tenant Score (identical logic to ListOps) ──────────
+// ── Retail Synergy + Competitive Saturation (business-profile-aware) ──
+//
+// Replaces the old single "Anchor Tenant" score, which treated ANY nearby
+// fast food within 0.5mi as an automatic -2 penalty regardless of what the
+// client was building. That's wrong for QSR/restaurant/franchise site
+// selection, where nearby national fast food/fast-casual/coffee brands
+// validate traffic and consumer demand rather than hurting the site.
+//
+// Retail Synergy: does nearby activity validate demand for THIS use?
+// Competitive Saturation: does nearby activity directly compete with THIS
+// use? Only categories in the selected profile's `competitorCategories`
+// count against the score — e.g. a QSR profile treats other QSR/fast-casual
+// concepts as competition, but a medical office profile has none, so
+// competitive saturation stays neutral and its weight gets redistributed.
 
 const BIG_BOX = new Set(['big_box'])
 
@@ -132,42 +162,78 @@ export type ScoredAnchor = {
   lng?: number
 }
 
-export function scoreAnchorTenants(
-  retailers: Retailer[]
+export function scoreRetailSynergy(
+  retailers: Retailer[],
+  profile: BusinessProfile
 ): { score: number; hasData: boolean; anchors: ScoredAnchor[] } {
   if (!retailers.length) return { score: 50, hasData: false, anchors: [] }
+  if (!profile.synergyCategories.length) return { score: 50, hasData: false, anchors: [] }
 
   let score = 50
   const anchors: ScoredAnchor[] = []
+  const synergy = new Set(profile.synergyCategories)
 
   for (const r of retailers) {
+    if (!synergy.has(r.category)) continue
+
     const isClose = r.distanceMiles <= 0.5
     const isNearby = r.distanceMiles <= 1.0
     let points = 0
-    let impact = 'neutral'
 
-    if (BIG_BOX.has(r.category) && isClose) { points = 18; impact = 'positive' }
-    else if (BIG_BOX.has(r.category) && isNearby) { points = 12; impact = 'positive' }
-    else if (BIG_BOX.has(r.category)) { points = 6; impact = 'positive' }
-    else if (r.category === 'grocery' && isClose) { points = 12; impact = 'positive' }
-    else if (r.category === 'grocery' && isNearby) { points = 8; impact = 'positive' }
-    else if (r.category === 'fast_casual' && isClose) { points = 6; impact = 'positive' }
-    else if (r.category === 'pharmacy' && isClose) { points = 5; impact = 'positive' }
-    else if (r.category === 'fast_food' && isClose) { points = -2; impact = 'negative' }
+    if (BIG_BOX.has(r.category) && isClose) points = 18
+    else if (BIG_BOX.has(r.category) && isNearby) points = 12
+    else if (BIG_BOX.has(r.category)) points = 6
+    else if (r.category === 'grocery' && isClose) points = 12
+    else if (r.category === 'grocery' && isNearby) points = 8
+    else if (r.category === 'grocery') points = 4
+    else if (r.category === 'pharmacy' && isClose) points = 5
+    else if (r.category === 'pharmacy') points = 3
+    else if ((r.category === 'fast_casual' || r.category === 'coffee') && isClose) points = 5
+    else if (r.category === 'fast_casual' || r.category === 'coffee') points = 3
+    // National QSR is a positive traffic/demand validator for food-adjacent
+    // profiles — this is the direct fix to the old "-2 near fast food" rule.
+    else if (r.category === 'fast_food' && isClose) points = 4
+    else if (r.category === 'fast_food') points = 2
+    else if ((r.category === 'fitness' || r.category === 'hotel' || r.category === 'entertainment') && isClose) points = 4
+    else if (r.category === 'fitness' || r.category === 'hotel' || r.category === 'entertainment') points = 2
 
+    if (points === 0) continue
     score = Math.max(0, Math.min(100, score + points))
-    if (points !== 0) {
-      anchors.push({
-        name: r.name,
-        distanceMiles: r.distanceMiles,
-        impact,
-        lat: r.lat,
-        lng: r.lng,
-      })
-    }
+    anchors.push({ name: r.name, distanceMiles: r.distanceMiles, impact: 'positive', lat: r.lat, lng: r.lng })
   }
 
   return { score: Math.min(100, score), hasData: true, anchors }
+}
+
+export function scoreCompetitiveSaturation(
+  retailers: Retailer[],
+  profile: BusinessProfile
+): { score: number; hasData: boolean; anchors: ScoredAnchor[] } {
+  // No defined competitor set for this use (e.g. medical, office, industrial)
+  // means we have no honest signal — stay neutral and redistribute weight
+  // rather than penalizing a site for unrelated nearby businesses.
+  if (!profile.competitorCategories.length) return { score: 50, hasData: false, anchors: [] }
+  if (!retailers.length) return { score: 50, hasData: false, anchors: [] }
+
+  const competitors = new Set(profile.competitorCategories)
+  const anchors: ScoredAnchor[] = []
+  let closeCount = 0
+  let nearbyCount = 0
+
+  for (const r of retailers) {
+    if (!competitors.has(r.category)) continue
+    if (r.distanceMiles <= 0.5) closeCount++
+    else if (r.distanceMiles <= 1.0) nearbyCount++
+    else continue
+    anchors.push({ name: r.name, distanceMiles: r.distanceMiles, impact: 'negative', lat: r.lat, lng: r.lng })
+  }
+
+  // Start neutral-high (competition alone isn't disqualifying — plenty of
+  // trade areas support several like concepts) and step down with density.
+  let score = 85 - closeCount * 12 - nearbyCount * 5
+  score = Math.max(10, Math.min(100, score))
+
+  return { score, hasData: true, anchors }
 }
 
 // ── Flood Risk Score (new — high value for FL investors) ─────
@@ -252,10 +318,12 @@ export interface GradeNarrative {
 
 export async function generateGradeNarrative(opts: {
   address: string
+  businessProfile: BusinessProfile
   overallGrade: string
   overallScore: number
   categoryScores: Record<keyof GradeWeights, number>
-  anchors: ScoredAnchor[]
+  synergyAnchors: ScoredAnchor[]
+  saturationAnchors: ScoredAnchor[]
   demographics: TractDemographics | null
   trafficCounts: TrafficCount[]
   flood: FloodZoneResult | null
@@ -264,16 +332,18 @@ export async function generateGradeNarrative(opts: {
 }): Promise<GradeNarrative> {
   const topTraffic = opts.trafficCounts.slice(0, 2)
 
-  const prompt = `You are a senior commercial real estate analyst writing for investors and business owners evaluating a Florida property — NOT for a licensed appraisal. Never use the words "appraisal," "appraised value," or "valuation." This is a Site Quality Score, a due-diligence starting point.
+  const prompt = `You are a senior commercial real estate analyst writing for investors and business owners evaluating a Florida property — NOT for a licensed appraisal. Never use the words "appraisal," "appraised value," or "valuation." This is a Site Quality Score, a due-diligence starting point, and it is being scored SPECIFICALLY for the intended business use below — not as a generic "good commercial property" rating.
 
 Property: ${opts.address}
-Overall Site Quality Score: ${opts.overallGrade} (${opts.overallScore.toFixed(1)}/100)
+Intended use: ${opts.businessProfile.label} (${opts.businessProfile.description})
+Overall Site Quality Score for this use: ${opts.overallGrade} (${opts.overallScore.toFixed(1)}/100)
 
 Category scores:
 - Traffic: ${opts.categoryScores.traffic.toFixed(1)}/100 — ${topTraffic.map(t => `${t.descFrom && t.descTo ? `${t.descFrom} to ${t.descTo}` : 'nearby segment'} (${t.aadt.toLocaleString()} AADT)`).join(', ') || 'no traffic count data available'}
 - Estimated spending power: ${opts.categoryScores.consumerSpend.toFixed(1)}/100${opts.spendEstimate ? ` — est. $${(opts.spendEstimate.estimatedTradeAreaSpendTotal / 1_000_000).toFixed(0)}M annual trade-area spend (estimated, not reported)` : ''}
 - Demographics: ${opts.categoryScores.demographics.toFixed(1)}/100${opts.demographics ? ` — ${opts.demographics.population.toLocaleString()} pop, ${opts.demographics.populationGrowth5yr}% 5yr growth, median income $${opts.demographics.medianHouseholdIncome.toLocaleString()}, median age ${opts.demographics.medianAge}` : ''}
-- Anchor tenants/retail density: ${opts.categoryScores.anchorTenant.toFixed(1)}/100 — ${opts.anchors.length ? opts.anchors.map(a => `${a.name} (${a.distanceMiles}mi, ${a.impact})`).join(', ') : 'no major anchors detected nearby'}
+- Retail synergy (nearby businesses that validate demand for this specific use): ${opts.categoryScores.retailSynergy.toFixed(1)}/100 — ${opts.synergyAnchors.length ? opts.synergyAnchors.map(a => `${a.name} (${a.distanceMiles}mi)`).join(', ') : 'no demand-validating businesses detected nearby'}
+- Competitive saturation (nearby businesses that directly compete with this specific use): ${opts.categoryScores.competitiveSaturation.toFixed(1)}/100 — ${opts.saturationAnchors.length ? opts.saturationAnchors.map(a => `${a.name} (${a.distanceMiles}mi)`).join(', ') : 'no direct competitors detected nearby, or not applicable to this use'}
 - Flood resilience: ${opts.categoryScores.floodRisk.toFixed(1)}/100${opts.flood ? ` — FEMA zone ${opts.flood.zone}, ${opts.flood.isSpecialFloodHazardArea ? 'within' : 'outside'} the Special Flood Hazard Area` : ' — no FEMA flood zone data available'}
 - Safety context: ${opts.categoryScores.crime.toFixed(1)}/100${opts.crime ? ` — ${opts.crime.agencyName}, trend ${opts.crime.trend}` : ' — jurisdiction-level crime data not available for this area'}
 
