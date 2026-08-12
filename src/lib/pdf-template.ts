@@ -13,6 +13,7 @@ import { LOGO_DATA_URI } from './logo'
 
 interface TemplateData {
   formattedAddress: string
+  businessProfileLabel: string
   overallGrade: string
   overallScore: number
   categoryScores: Record<keyof GradeWeights, number>
@@ -94,7 +95,7 @@ function renderHighlights(rawData: TemplateData['rawData']): string {
 
 export function renderReportHtml(data: TemplateData): string {
   const {
-    formattedAddress, overallGrade, overallScore, categoryScores,
+    formattedAddress, businessProfileLabel, overallGrade, overallScore, categoryScores,
     generatedDate, rawData, narrative, mapImageDataUri,
   } = data
 
@@ -294,8 +295,8 @@ export function renderReportHtml(data: TemplateData): string {
     <div class="grade-row">
       ${renderGauge(overallScore, overallGrade)}
       <div class="grade-meta">
-        <div class="sq-label">Site Quality Score</div>
-        <div class="sq-sub">A due-diligence starting point synthesized from public Census, FDOT, FEMA, FBI, and retail-density data.</div>
+        <div class="sq-label">Site Quality Score &mdash; Scored For: ${businessProfileLabel}</div>
+        <div class="sq-sub">A due-diligence starting point synthesized from public Census, FDOT, FEMA, FBI, and retail-density data, weighted for this specific business use.</div>
       </div>
     </div>
     ${renderHighlights(rawData)}
