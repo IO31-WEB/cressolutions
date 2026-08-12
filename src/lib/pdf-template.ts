@@ -31,6 +31,7 @@ interface TemplateData {
     trafficCounts: Array<{ aadt: number; roadway: string | null; descFrom: string | null; descTo: string | null; distanceMiles: number }>
     synergyAnchors: Array<{ name: string; distanceMiles: number; impact: string; lat?: number; lng?: number }>
     saturationAnchors: Array<{ name: string; distanceMiles: number; impact: string; lat?: number; lng?: number }>
+    saturationScored?: boolean
     flood: { zone: string; isSpecialFloodHazardArea: boolean; description: string } | null
     crime: { agencyName: string; trend: string } | null
     spendEstimate: { estimatedAnnualHouseholdSpend: number; estimatedTradeAreaSpendTotal: number } | null
@@ -154,7 +155,9 @@ export function renderReportHtml(data: TemplateData): string {
     ? `<ul class="plain-list">${saturationAnchors.slice(0, 10).map(a =>
         `<li><strong>${a.name}</strong> — ${a.distanceMiles} mi <span class="impact-negative">(direct competitor)</span></li>`
       ).join('')}</ul>`
-    : `<p class="muted">No direct competitors detected within 1.5 miles, or competitive saturation is not scored for this use.</p>`
+    : rawData.saturationScored === false
+      ? `<p class="muted">Competitive saturation is not scored for this business use — there isn't a well-defined direct-competitor category for it, so this factor is left neutral and its weight is redistributed to the other categories.</p>`
+      : `<p class="muted">No direct competitors detected within 1.5 miles for this use.</p>`
 
   const mapBlock = mapImageDataUri
     ? `<div class="map-wrap">
