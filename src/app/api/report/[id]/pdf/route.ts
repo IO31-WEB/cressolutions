@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { reports } from '@/lib/db/schema'
 import { renderReportHtml } from '@/lib/pdf-template'
 import type { GradeWeights } from '@/lib/grader'
+import { getBusinessProfile } from '@/lib/business-profiles'
 
 // PDF rendering is the slow step (browser cold start + print). No external
 // API calls happen here — the report data is already cached — so this is
@@ -55,6 +56,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const html = renderReportHtml({
     formattedAddress: report.formattedAddress,
+    businessProfileLabel: getBusinessProfile(report.businessProfile).label,
     overallGrade: report.overallGrade,
     overallScore: report.overallScore,
     categoryScores: report.categoryScores as Record<keyof GradeWeights, number>,
