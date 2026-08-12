@@ -22,6 +22,7 @@ export type RetailerCategory =
   | 'fitness'
   | 'hotel'
   | 'entertainment'
+  | 'medical'
   | 'other'
 
 export interface Retailer {
@@ -47,9 +48,13 @@ const TYPE_CATEGORY_MAP: Record<string, RetailerCategory> = {
   furniture_store: 'big_box',
   hardware_store: 'big_box',
   home_goods_store: 'big_box',
+  home_improvement_store: 'big_box',
+  discount_store: 'big_box',
+  warehouse_store: 'big_box',
   electronics_store: 'big_box',
   shopping_mall: 'big_box',
   supermarket: 'grocery',
+  grocery_store: 'grocery',
   pharmacy: 'pharmacy',
   drugstore: 'pharmacy',
   fast_food_restaurant: 'fast_food',
@@ -59,8 +64,19 @@ const TYPE_CATEGORY_MAP: Record<string, RetailerCategory> = {
   coffee_shop: 'coffee',
   gym: 'fitness',
   fitness_center: 'fitness',
+  yoga_studio: 'fitness',
+  sports_club: 'fitness',
   movie_theater: 'entertainment',
   bowling_alley: 'entertainment',
+  doctor: 'medical',
+  medical_lab: 'medical',
+  physiotherapist: 'medical',
+  dental_clinic: 'medical',
+  dentist: 'medical',
+  hospital: 'medical',
+  chiropractor: 'medical',
+  medical_clinic: 'medical',
+  medical_center: 'medical',
   // Note: NO 'lodging' → 'hotel' fallback here on purpose. Google's generic
   // "lodging" type covers everything from a Marriott to a single Airbnb/VRBO
   // unit, and there's no reliable signal in the free tier to tell them apart.
@@ -135,13 +151,18 @@ function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number):
 // category data they actually need. Splitting into type-group queries
 // gives each family (food, retail/service, hospitality/fitness) its own
 // 20-result budget so density in one category can't crowd out another.
-const FOOD_TYPES = ['fast_food_restaurant', 'meal_takeaway', 'restaurant', 'cafe']
+const FOOD_TYPES = ['fast_food_restaurant', 'meal_takeaway', 'restaurant', 'cafe', 'coffee_shop']
 const RETAIL_SERVICE_TYPES = [
-  'supermarket', 'department_store', 'hardware_store', 'home_goods_store',
-  'electronics_store', 'pharmacy', 'drugstore', 'shopping_mall', 'furniture_store',
+  'supermarket', 'grocery_store', 'department_store', 'discount_store', 'warehouse_store',
+  'home_improvement_store', 'hardware_store', 'home_goods_store', 'electronics_store',
+  'pharmacy', 'drugstore', 'shopping_mall', 'furniture_store',
 ]
 const HOSPITALITY_FITNESS_TYPES = [
-  'gym', 'fitness_center', 'lodging', 'movie_theater', 'bowling_alley',
+  'gym', 'fitness_center', 'yoga_studio', 'sports_club', 'lodging', 'movie_theater', 'bowling_alley',
+]
+const MEDICAL_TYPES = [
+  'doctor', 'hospital', 'medical_lab', 'physiotherapist', 'dental_clinic', 'dentist',
+  'chiropractor', 'medical_clinic', 'medical_center',
 ]
 
 async function searchNearbyPlacesByTypes(lat: number, lng: number, includedTypes: string[]): Promise<any[]> {
@@ -173,16 +194,17 @@ async function searchNearbyPlacesByTypes(lat: number, lng: number, includedTypes
 }
 
 async function searchNearbyPlaces(lat: number, lng: number): Promise<any[]> {
-  // Three separate requests instead of one — each type group gets its own
-  // 20-result budget. Costs 3 Places calls per report instead of 1; still
+  // Four separate requests instead of one — each type group gets its own
+  // 20-result budget. Costs 4 Places calls per report instead of 1; still
   // free at this site's expected volume (Pro tier's free monthly
   // allotment is 5,000 calls), and every report is still cached for 60 days.
-  const [food, retail, hospitality] = await Promise.all([
+  const [food, retail, hospitality, medical] = await Promise.all([
     searchNearbyPlacesByTypes(lat, lng, FOOD_TYPES),
     searchNearbyPlacesByTypes(lat, lng, RETAIL_SERVICE_TYPES),
     searchNearbyPlacesByTypes(lat, lng, HOSPITALITY_FITNESS_TYPES),
+    searchNearbyPlacesByTypes(lat, lng, MEDICAL_TYPES),
   ])
-  return [...food, ...retail, ...hospitality]
+  return [...food, ...retail, ...hospitality, ...medical]
 }
 
 export async function getNearbyRetailers(lat: number, lng: number): Promise<Retailer[]> {
