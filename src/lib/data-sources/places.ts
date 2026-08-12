@@ -126,7 +126,25 @@ function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number):
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-async function searchNearbyPlaces(lat: number, lng: number): Promise<any[]> {
+// Google's Nearby Search (New) caps maxResultCount at 20 per request. A
+// single query across all 16+ included types, ranked by distance, means a
+// site embedded in a restaurant row (like Busch Blvd) can have its entire
+// 20-result budget consumed by food places before a pharmacy or grocery
+// store half a mile out ever gets a chance to appear — which starves every
+// non-food business profile (retail, medical, fitness, office) of the
+// category data they actually need. Splitting into type-group queries
+// gives each family (food, retail/service, hospitality/fitness) its own
+// 20-result budget so density in one category can't crowd out another.
+const FOOD_TYPES = ['fast_food_restaurant', 'meal_takeaway', 'restaurant', 'cafe']
+const RETAIL_SERVICE_TYPES = [
+  'supermarket', 'department_store', 'hardware_store', 'home_goods_store',
+  'electronics_store', 'pharmacy', 'drugstore', 'shopping_mall', 'furniture_store',
+]
+const HOSPITALITY_FITNESS_TYPES = [
+  'gym', 'fitness_center', 'lodging', 'movie_theater', 'bowling_alley',
+]
+
+async function searchNearbyPlacesByTypes(lat: number, lng: number, includedTypes: string[]): Promise<any[]> {
   if (!PLACES_API_KEY) throw new PlacesError('GOOGLE_API_KEY is not configured', 'NO_API_KEY')
 
   const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
@@ -138,12 +156,7 @@ async function searchNearbyPlaces(lat: number, lng: number): Promise<any[]> {
       'X-Goog-FieldMask': 'places.displayName,places.types,places.location',
     },
     body: JSON.stringify({
-      includedTypes: [
-        'supermarket', 'department_store', 'hardware_store', 'home_goods_store',
-        'electronics_store', 'pharmacy', 'drugstore', 'shopping_mall',
-        'furniture_store', 'fast_food_restaurant', 'meal_takeaway', 'restaurant', 'cafe',
-        'gym', 'fitness_center', 'lodging', 'movie_theater', 'bowling_alley',
-      ],
+      includedTypes,
       maxResultCount: 20,
       locationRestriction: {
         circle: { center: { latitude: lat, longitude: lng }, radius: SEARCH_RADIUS_METERS },
@@ -157,6 +170,19 @@ async function searchNearbyPlaces(lat: number, lng: number): Promise<any[]> {
   }
   const data = await res.json()
   return data.places ?? []
+}
+
+async function searchNearbyPlaces(lat: number, lng: number): Promise<any[]> {
+  // Three separate requests instead of one — each type group gets its own
+  // 20-result budget. Costs 3 Places calls per report instead of 1; still
+  // free at this site's expected volume (Pro tier's free monthly
+  // allotment is 5,000 calls), and every report is still cached for 60 days.
+  const [food, retail, hospitality] = await Promise.all([
+    searchNearbyPlacesByTypes(lat, lng, FOOD_TYPES),
+    searchNearbyPlacesByTypes(lat, lng, RETAIL_SERVICE_TYPES),
+    searchNearbyPlacesByTypes(lat, lng, HOSPITALITY_FITNESS_TYPES),
+  ])
+  return [...food, ...retail, ...hospitality]
 }
 
 export async function getNearbyRetailers(lat: number, lng: number): Promise<Retailer[]> {
