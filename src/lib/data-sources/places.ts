@@ -59,10 +59,14 @@ const TYPE_CATEGORY_MAP: Record<string, RetailerCategory> = {
   coffee_shop: 'coffee',
   gym: 'fitness',
   fitness_center: 'fitness',
-  lodging: 'hotel',
-  hotel: 'hotel',
   movie_theater: 'entertainment',
   bowling_alley: 'entertainment',
+  // Note: NO 'lodging' → 'hotel' fallback here on purpose. Google's generic
+  // "lodging" type covers everything from a Marriott to a single Airbnb/VRBO
+  // unit, and there's no reliable signal in the free tier to tell them apart.
+  // 'hotel' is name-matched only (see HOTEL_NAMES below) so a listing like
+  // "Cozy 1-bedroom studio with AC" doesn't get counted as a demand
+  // validator in the client-facing report.
 }
 
 const BIG_BOX_NAMES = [
