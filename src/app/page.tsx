@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import { CATEGORY_LABELS, type GradeWeights } from '@/lib/grader-types'
+import { BUSINESS_PROFILE_LIST, type BusinessProfileId } from '@/lib/business-profiles'
 
 interface AnalyzeResponse {
   reportId: number
   cached: boolean
   formattedAddress: string
+  businessProfile: BusinessProfileId
   overallScore: number
   overallGrade: string
   categoryScores: Record<keyof GradeWeights, number>
@@ -23,6 +25,7 @@ function gradeColor(grade: string): string {
 
 export default function Home() {
   const [address, setAddress] = useState('')
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfileId>('general')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
@@ -37,7 +40,7 @@ export default function Home() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
+        body: JSON.stringify({ address, businessProfile }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong.')
@@ -60,19 +63,38 @@ export default function Home() {
       </div>
 
       <div className="max-w-2xl mx-auto px-6 -mt-6">
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex gap-3">
-          <input
-            type="text"
-            required
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="1234 Dale Mabry Hwy, Tampa, FL 33607"
-            className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy"
-          />
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Property address</label>
+            <input
+              type="text"
+              required
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="1234 Dale Mabry Hwy, Tampa, FL 33607"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Intended business use</label>
+            <select
+              value={businessProfile}
+              onChange={(e) => setBusinessProfile(e.target.value as BusinessProfileId)}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy bg-white"
+            >
+              {BUSINESS_PROFILE_LIST.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Scoring — especially nearby retail — is weighted for this specific use, so the same
+              address can score differently depending on what you select.
+            </p>
+          </div>
           <button
             type="submit"
             disabled={loading}
-            className="bg-navy text-white px-5 py-2 rounded text-sm font-medium hover:bg-navy-light disabled:opacity-50"
+            className="w-full bg-navy text-white px-5 py-2 rounded text-sm font-medium hover:bg-navy-light disabled:opacity-50"
           >
             {loading ? 'Analyzing…' : 'Analyze'}
           </button>
@@ -87,6 +109,9 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-gray-500">{result.formattedAddress}</div>
+                <div className="text-xs text-gold font-medium mt-0.5 uppercase tracking-wide">
+                  Scored for: {BUSINESS_PROFILE_LIST.find((p) => p.id === result.businessProfile)?.label ?? result.businessProfile}
+                </div>
                 {result.cached && <div className="text-xs text-gray-400 mt-0.5">Loaded from cache</div>}
               </div>
               <div className={`text-2xl font-bold rounded-full w-16 h-16 flex items-center justify-center ${gradeColor(result.overallGrade)}`}>
