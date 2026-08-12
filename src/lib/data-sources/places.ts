@@ -18,6 +18,10 @@ export type RetailerCategory =
   | 'pharmacy'
   | 'fast_food'
   | 'fast_casual'
+  | 'coffee'
+  | 'fitness'
+  | 'hotel'
+  | 'entertainment'
   | 'other'
 
 export interface Retailer {
@@ -51,7 +55,14 @@ const TYPE_CATEGORY_MAP: Record<string, RetailerCategory> = {
   fast_food_restaurant: 'fast_food',
   meal_takeaway: 'fast_food',
   restaurant: 'fast_casual',
-  cafe: 'fast_casual',
+  cafe: 'coffee',
+  coffee_shop: 'coffee',
+  gym: 'fitness',
+  fitness_center: 'fitness',
+  lodging: 'hotel',
+  hotel: 'hotel',
+  movie_theater: 'entertainment',
+  bowling_alley: 'entertainment',
 }
 
 const BIG_BOX_NAMES = [
@@ -72,11 +83,30 @@ const FAST_FOOD_NAMES = [
   "mcdonald's", 'burger king', 'wendy', 'taco bell', 'subway',
   'domino', 'pizza hut', 'papa john', 'kfc', 'popeyes', 'sonic',
 ]
+const COFFEE_NAMES = [
+  'starbucks', 'dunkin', 'dutch bros', "peet's", 'caribou coffee', 'scooter\u2019s coffee',
+]
+const FITNESS_NAMES = [
+  'planet fitness', 'la fitness', 'lifetime fitness', 'orangetheory', 'crunch fitness',
+  'anytime fitness', "gold's gym", 'ymca', 'f45', 'club pilates', 'orange theory',
+]
+const HOTEL_NAMES = [
+  'marriott', 'hilton', 'hampton inn', 'holiday inn', 'best western', 'comfort inn',
+  'courtyard', 'residence inn', 'la quinta', 'days inn', 'super 8', 'extended stay',
+]
+const ENTERTAINMENT_NAMES = [
+  'amc theatres', 'regal cinemas', 'cinemark', 'top golf', 'topgolf', 'dave & buster',
+  'main event', 'bowlero',
+]
 
 function classifyByName(name: string): RetailerCategory | null {
   const lower = name.toLowerCase()
   if (BIG_BOX_NAMES.some((n) => lower.includes(n))) return 'big_box'
   if (GROCERY_NAMES.some((n) => lower.includes(n))) return 'grocery'
+  if (COFFEE_NAMES.some((n) => lower.includes(n))) return 'coffee'
+  if (FITNESS_NAMES.some((n) => lower.includes(n))) return 'fitness'
+  if (HOTEL_NAMES.some((n) => lower.includes(n))) return 'hotel'
+  if (ENTERTAINMENT_NAMES.some((n) => lower.includes(n))) return 'entertainment'
   if (FAST_CASUAL_NAMES.some((n) => lower.includes(n))) return 'fast_casual'
   if (FAST_FOOD_NAMES.some((n) => lower.includes(n))) return 'fast_food'
   return null
@@ -108,6 +138,7 @@ async function searchNearbyPlaces(lat: number, lng: number): Promise<any[]> {
         'supermarket', 'department_store', 'hardware_store', 'home_goods_store',
         'electronics_store', 'pharmacy', 'drugstore', 'shopping_mall',
         'furniture_store', 'fast_food_restaurant', 'meal_takeaway', 'restaurant', 'cafe',
+        'gym', 'fitness_center', 'lodging', 'movie_theater', 'bowling_alley',
       ],
       maxResultCount: 20,
       locationRestriction: {
