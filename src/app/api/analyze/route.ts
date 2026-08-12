@@ -11,18 +11,22 @@ import { getFloodZone } from '@/lib/data-sources/fema-flood'
 import { getCrimeContext } from '@/lib/data-sources/fbi-crime'
 import { estimateTradeAreaSpend } from '@/lib/data-sources/spend-estimate'
 import {
-  DEFAULT_WEIGHTS,
   redistributeWeights,
   computeOverallScore,
   scoreToGrade,
   scoreTraffic,
   scoreConsumerSpend,
   scoreDemographics,
-  scoreAnchorTenants,
+  scoreRetailSynergy,
+  scoreCompetitiveSaturation,
   scoreFloodRisk,
   scoreCrimeContext,
   generateGradeNarrative,
+  getBusinessProfile,
+  weightsForProfile,
+  BUSINESS_PROFILES,
   type GradeWeights,
+  type BusinessProfileId,
 } from '@/lib/grader'
 
 const CACHE_DAYS = 60
@@ -30,6 +34,13 @@ const COORD_PRECISION = 4 // ~11m — same building, different phrasing of the a
 
 const requestSchema = z.object({
   address: z.string().min(5).max(200),
+  // Which business use to score this site for — drives Retail Synergy vs.
+  // Competitive Saturation and category weighting. Defaults to a balanced,
+  // use-agnostic profile if the client omits it (e.g. older cached callers).
+  businessProfile: z
+    .enum(Object.keys(BUSINESS_PROFILES) as [BusinessProfileId, ...BusinessProfileId[]])
+    .optional()
+    .default('general'),
 })
 
 function round(n: number): number {
@@ -57,13 +68,18 @@ export async function POST(req: NextRequest) {
 
   const latRounded = round(geo.lat)
   const lngRounded = round(geo.lng)
+  const profile = getBusinessProfile(parsed.businessProfile)
 
-  // Serve from cache if we've already built this exact report recently —
-  // this is the main cost control: a repeat lookup costs $0.
+  // Serve from cache if we've already built this exact report (same address
+  // AND same business profile) recently — the score is use-specific, so a
+  // QSR analysis of an address can't be served from a medical-office cache
+  // entry for the same address, even though the underlying Census/FDOT/
+  // Places data is identical.
   const cached = await db.query.reports.findFirst({
     where: and(
       eq(reports.latRounded, latRounded),
       eq(reports.lngRounded, lngRounded),
+      eq(reports.businessProfile, profile.id),
       gte(reports.expiresAt, new Date())
     ),
   })
@@ -93,7 +109,8 @@ export async function POST(req: NextRequest) {
   const traffic = scoreTraffic(trafficCounts)
   const spend = scoreConsumerSpend(spendEstimate)
   const demo = scoreDemographics(demographics)
-  const anchor = scoreAnchorTenants(retailers)
+  const synergy = scoreRetailSynergy(retailers, profile)
+  const saturation = scoreCompetitiveSaturation(retailers, profile)
   const flood_ = scoreFloodRisk(flood)
   const crime_ = scoreCrimeContext(crime)
 
@@ -101,28 +118,34 @@ export async function POST(req: NextRequest) {
     traffic: traffic.score,
     consumerSpend: spend.score,
     demographics: demo.score,
-    anchorTenant: anchor.score,
+    retailSynergy: synergy.score,
+    competitiveSaturation: saturation.score,
     floodRisk: flood_.score,
     crime: crime_.score,
   }
 
   const missing = (Object.entries({
     traffic: traffic.hasData, consumerSpend: spend.hasData, demographics: demo.hasData,
-    anchorTenant: anchor.hasData, floodRisk: flood_.hasData, crime: crime_.hasData,
+    retailSynergy: synergy.hasData, competitiveSaturation: saturation.hasData,
+    floodRisk: flood_.hasData, crime: crime_.hasData,
   })
     .filter(([, hasData]) => !hasData)
     .map(([key]) => key)) as Array<keyof GradeWeights>
 
-  const weights = redistributeWeights(DEFAULT_WEIGHTS, missing)
+  const weights = redistributeWeights(weightsForProfile(profile), missing)
   const overallScore = computeOverallScore(categoryScores, weights)
   const overallGrade = scoreToGrade(overallScore)
 
+  const anchors = [...synergy.anchors, ...saturation.anchors]
+
   const narrative = await generateGradeNarrative({
     address: geo.formattedAddress,
+    businessProfile: profile,
     overallGrade,
     overallScore,
     categoryScores,
-    anchors: anchor.anchors,
+    synergyAnchors: synergy.anchors,
+    saturationAnchors: saturation.anchors,
     demographics,
     trafficCounts,
     flood,
@@ -130,7 +153,7 @@ export async function POST(req: NextRequest) {
     spendEstimate,
   }).catch(() => null)
 
-  const rawData = { demographics, trafficCounts, anchors: anchor.anchors, flood, crime, spendEstimate }
+  const rawData = { demographics, trafficCounts, anchors, flood, crime, spendEstimate }
 
   const [inserted] = await db
     .insert(reports)
@@ -145,6 +168,7 @@ export async function POST(req: NextRequest) {
       stateFips: geo.stateFips || null,
       countyFips: geo.countyFips || null,
       tractFips: geo.tractFips || null,
+      businessProfile: profile.id,
       overallScore,
       overallGrade,
       categoryScores,
@@ -160,6 +184,7 @@ export async function POST(req: NextRequest) {
 function serialize(report: typeof reports.$inferSelect) {
   return {
     formattedAddress: report.formattedAddress,
+    businessProfile: report.businessProfile,
     overallScore: report.overallScore,
     overallGrade: report.overallGrade,
     categoryScores: report.categoryScores,
