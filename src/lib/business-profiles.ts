@@ -92,8 +92,12 @@ export const BUSINESS_PROFILES: Record<BusinessProfileId, BusinessProfile> = {
     label: 'Medical / Professional Office',
     description: 'Medical, dental, or professional/clinical office use.',
     synergyCategories: ['pharmacy', 'big_box', 'grocery'],
-    competitorCategories: [],
-    weights: { traffic: 0.12, retailSynergy: 0.08, competitiveSaturation: 0.02, consumerSpend: 0.20, demographics: 0.28, floodRisk: 0.20, crime: 0.10 },
+    // Now backed by a real Places search (doctor/hospital/dental/clinic
+    // types) — previously left empty because that data wasn't being
+    // fetched at all, which made "no competitors detected" a misleading
+    // non-answer rather than an actual finding.
+    competitorCategories: ['medical'],
+    weights: { traffic: 0.12, retailSynergy: 0.08, competitiveSaturation: 0.08, consumerSpend: 0.20, demographics: 0.22, floodRisk: 0.20, crime: 0.10 },
   },
   fitness: {
     id: 'fitness',
