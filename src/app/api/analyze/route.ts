@@ -141,6 +141,7 @@ export async function POST(req: NextRequest) {
     trafficCounts,
     synergyAnchors: synergy.anchors,
     saturationAnchors: saturation.anchors,
+    saturationScored: saturation.hasData,
     flood,
     crime,
     spendEstimate,
