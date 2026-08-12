@@ -55,7 +55,12 @@ export const BUSINESS_PROFILES: Record<BusinessProfileId, BusinessProfile> = {
     label: 'QSR / Fast Food / Drive-Thru',
     description: 'Quick-service restaurant, drive-thru, or fast-casual concept.',
     synergyCategories: FOOD_SYNERGY,
-    competitorCategories: ['fast_food', 'fast_casual'],
+    // Only other national/regional QSR chains count as saturation — an
+    // independent sit-down restaurant nearby (gyros place, pizzeria, pub)
+    // is a different format entirely and shouldn't ding a drive-thru
+    // concept's score. Concept-level (burger vs. burger) granularity is a
+    // separate, larger feature — this is format-level only.
+    competitorCategories: ['fast_food'],
     weights: { traffic: 0.26, retailSynergy: 0.18, competitiveSaturation: 0.12, consumerSpend: 0.14, demographics: 0.16, floodRisk: 0.09, crime: 0.05 },
   },
   restaurant: {
