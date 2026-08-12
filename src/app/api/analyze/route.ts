@@ -136,7 +136,15 @@ export async function POST(req: NextRequest) {
   const overallScore = computeOverallScore(categoryScores, weights)
   const overallGrade = scoreToGrade(overallScore)
 
-  const anchors = [...synergy.anchors, ...saturation.anchors]
+  const rawData = {
+    demographics,
+    trafficCounts,
+    synergyAnchors: synergy.anchors,
+    saturationAnchors: saturation.anchors,
+    flood,
+    crime,
+    spendEstimate,
+  }
 
   const narrative = await generateGradeNarrative({
     address: geo.formattedAddress,
@@ -152,8 +160,6 @@ export async function POST(req: NextRequest) {
     crime,
     spendEstimate,
   }).catch(() => null)
-
-  const rawData = { demographics, trafficCounts, anchors, flood, crime, spendEstimate }
 
   const [inserted] = await db
     .insert(reports)
