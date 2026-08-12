@@ -31,6 +31,12 @@ export const reports = pgTable(
     countyFips: text('county_fips'),
     tractFips: text('tract_fips'),
 
+    // Which business use this report was scored for (qsr, restaurant,
+    // medical, retail, etc.) — see src/lib/business-profiles.ts. Part of
+    // the cache key: the same address scores differently per use, so a
+    // cached row only satisfies a repeat lookup for the SAME profile.
+    businessProfile: text('business_profile').notNull().default('general'),
+
     overallScore: doublePrecision('overall_score').notNull(),
     overallGrade: text('overall_grade').notNull(),
 
@@ -48,7 +54,7 @@ export const reports = pgTable(
     expiresAt: timestamp('expires_at').notNull(), // cache TTL, default +60d
   },
   (table) => ({
-    locationIdx: index('reports_location_idx').on(table.latRounded, table.lngRounded),
+    locationIdx: index('reports_location_idx').on(table.latRounded, table.lngRounded, table.businessProfile),
   })
 )
 
